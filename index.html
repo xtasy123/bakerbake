@@ -166,7 +166,7 @@
     border-bottom: 1px solid var(--border);
   }
 
-  /* Cards use CSS grid internally so rows are explicit */
+  /* Cards — fixed height, 3-row grid: image / name / price */
   .product-card {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -177,21 +177,23 @@
     position: relative;
     overflow: hidden;
     display: grid;
-    grid-template-rows: 180px 1fr auto;
-    min-height: 260px;
+    grid-template-rows: 160px auto auto;
+    height: 240px; /* fixed — image can never expand this */
   }
   .product-card:hover { border-color: var(--accent-mid); transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.08); }
   .product-card:active { transform: translateY(0); box-shadow: none; }
 
-  /* Image row — fixed 180px height from grid-template-rows */
+  /* Image row — clipped to exactly 160px, never overflows */
   .card-img {
     width: 100%;
-    height: 100%; /* fills the 180px grid row */
-    background: var(--surface2);
+    height: 160px;
     overflow: hidden;
+    background: var(--surface2);
+    flex-shrink: 0;
   }
   .card-img img {
-    width: 100%; height: 100%;
+    width: 100%;
+    height: 100%;
     object-fit: cover;
     display: block;
     transition: transform 0.2s;
@@ -204,17 +206,21 @@
   }
   .card-img-placeholder svg { width: 32px; height: 32px; opacity: 0.3; }
 
-  /* Name row — grows to fill remaining space */
+  /* Name — sits below image, two-line max so it never pushes price off */
   .product-card .name {
     font-size: 12px; font-weight: 600; color: var(--text);
-    line-height: 1.4; padding: 10px 12px 4px;
-    align-self: start;
+    line-height: 1.4;
+    padding: 10px 12px 4px;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
   }
 
-  /* Price row — always pinned to bottom of card */
+  /* Price — always the last row, never clipped */
   .product-card .price {
     font-size: 13px; font-weight: 700; color: var(--accent);
-    padding: 0 12px 14px;
+    padding: 0 12px 12px;
     align-self: end;
   }
 
