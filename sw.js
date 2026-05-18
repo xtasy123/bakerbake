@@ -1,4 +1,4 @@
-const CACHE_NAME = 'brewpoint-v3';
+const CACHE_NAME = 'brewpoint-v4';
 const ASSETS = [
   './',
   './index.html',
@@ -22,6 +22,21 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request).catch(() => caches.match('./index.html')))
+    // 1. Try the network first
+    fetch(e.request)
+      .then(response => {
+        // 2. If network works, clone the response and save it to cache
+        const resClone = response.clone();
+        caches.open(CACHE_NAME).then(cache => {
+          cache.put(e.request, resClone);
+        });
+        return response;
+      })
+      .catch(() => {
+        // 3. If network fails (offline), look in the cache
+        return caches.match(e.request).then(cached => {
+          return cached || caches.match('./index.html');
+        });
+      })
   );
 });
