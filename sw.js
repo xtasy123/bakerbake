@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bakerbake-v5';
+const CACHE_NAME = 'bakerbake-v6';
 const ASSETS = [
   './index.html',
   './manifest.json',
@@ -9,7 +9,9 @@ const ASSETS = [
 
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME)
+      .then(cache => Promise.allSettled(ASSETS.map(asset => cache.add(asset))))
+      .then(() => self.skipWaiting())
   );
 });
 
@@ -24,18 +26,20 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
 
+  const request = e.request;
+
   e.respondWith(
-    fetch(e.request)
+    fetch(request)
       .then(response => {
-        const url = new URL(e.request.url);
+        const url = new URL(request.url);
         if (url.origin === self.location.origin && response.ok) {
           const resClone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(e.request, resClone));
+          caches.open(CACHE_NAME).then(cache => cache.put(request, resClone));
         }
         return response;
       })
       .catch(() => {
-        return caches.match(e.request).then(cached => {
+        return caches.match(request).then(cached => {
           return cached || caches.match('./index.html');
         });
       })
