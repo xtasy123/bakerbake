@@ -148,7 +148,7 @@
 
   .catalog-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
     gap: 12px;
     padding: 16px 20px 32px;
     align-items: start;
@@ -177,8 +177,8 @@
     position: relative;
     overflow: hidden;
     display: grid;
-    grid-template-rows: 160px auto auto;
-    height: 240px; /* fixed — image can never expand this */
+    grid-template-rows: 156px auto auto;
+    height: 224px; /* fixed — image can never expand this */
   }
   .product-card:hover { border-color: var(--accent-mid); transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.08); }
   .product-card:active { transform: translateY(0); box-shadow: none; }
@@ -186,7 +186,7 @@
   /* Image row — clipped to exactly 160px, never overflows */
   .card-img {
     width: 100%;
-    height: 160px;
+    height: 156px;
     overflow: hidden;
     background: var(--surface2);
     flex-shrink: 0;
@@ -238,7 +238,7 @@
 
   /* Cart side — sticky so it never scrolls away */
   .cart {
-    width: 320px;
+    width: 280px;
     flex-shrink: 0;
     background: var(--surface);
     border-left: 1px solid var(--border);
@@ -591,7 +591,7 @@ const PRODUCTS = [
   { id:2,  name:'Americano',               filter:'HOT',    subgroup:null,      imageUrl:'images/americano.avif', price:130 },
   { id:3,  name:'Espresso Macchiato',      filter:'HOT',    subgroup:null,      imageUrl:'images/espresso-mach.avif', price:140 },
   { id:4,  name:'Flat White',              filter:'HOT',    subgroup:null,      imageUrl:'images/flat-white.avif', price:150 },
-  { id:5,  name:'Cappuccino',              filter:'HOT',    subgroup:null,      imageUrl:'images/cappuccino.avif', price:150 },
+  { id:5,  name:'Cappuccino',              filter:'HOT',    subgroup:null,      imageUrl:'images/cappucino.avif', price:150 },
   { id:6,  name:'Caffe Latte',             filter:'HOT',    subgroup:null,      imageUrl:'images/caffe-latte.avif', price:155 },
   { id:7,  name:'Spanish Latte',           filter:'HOT',    subgroup:null,      imageUrl:'images/spanish-latte.jpg', price:160 },
   { id:8,  name:'Iced Americano',          filter:'COLD',   subgroup:null,      imageUrl:null, price:140 },
@@ -643,9 +643,17 @@ const IMG_PLACEHOLDER = `<svg viewBox="0 0 24 24" fill="none" stroke="currentCol
 
 function cardImgHTML(imageUrl) {
   if (imageUrl) {
-    return `<div class="card-img"><img src="${imageUrl}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'card-img-placeholder\\'>${IMG_PLACEHOLDER}</div>'"></div>`;
+    return `<div class="card-img"><img src="${imageUrl}" alt="" loading="lazy"></div>`;
   }
   return `<div class="card-img"><div class="card-img-placeholder">${IMG_PLACEHOLDER}</div></div>`;
+}
+
+function bindImageFallbacks(scope = document) {
+  scope.querySelectorAll('.card-img img').forEach(img => {
+    img.addEventListener('error', () => {
+      img.parentElement.innerHTML = `<div class="card-img-placeholder">${IMG_PLACEHOLDER}</div>`;
+    }, { once: true });
+  });
 }
 
 function productCardHTML(p) {
@@ -673,6 +681,7 @@ function renderCatalog() {
   } else {
     grid.innerHTML = filtered.map(productCardHTML).join('');
   }
+  bindImageFallbacks(grid);
 }
 
 // ── Cart ──
