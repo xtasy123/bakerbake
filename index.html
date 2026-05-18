@@ -500,6 +500,16 @@
     z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.2s;
   }
   .modal-overlay.open { opacity: 1; pointer-events: all; }
+  .modal-overlay.compact .modal {
+    width: 340px;
+    padding: 24px;
+  }
+  .modal-overlay.compact .modal h2 { margin-bottom: 8px; }
+  .modal-message {
+    font-size: 14px;
+    color: var(--text2);
+    margin-bottom: 22px;
+  }
 
   .modal {
     background: var(--surface);
@@ -629,7 +639,7 @@
   </nav>
   <div class="topbar-right">
     <span class="cashier-label" id="cashier-label"></span>
-    <button class="logout-btn" onclick="logout()">Logout</button>
+    <button class="logout-btn" onclick="openLogoutConfirm()">Logout</button>
     <span class="clock" id="clock">--:--</span>
   </div>
 </header>
@@ -720,6 +730,18 @@
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closePayment()">Cancel</button>
       <button class="btn-confirm" id="confirm-btn" onclick="confirmPayment()">Confirm Payment</button>
+    </div>
+  </div>
+</div>
+
+<!-- Logout Confirmation Modal -->
+<div class="modal-overlay compact" id="logout-modal">
+  <div class="modal">
+    <h2>Log out?</h2>
+    <p class="modal-message">Are you sure you want to log out of this cashier account?</p>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeLogoutConfirm()">Cancel</button>
+      <button class="btn-confirm" onclick="confirmLogout()">Log Out</button>
     </div>
   </div>
 </div>
@@ -827,7 +849,16 @@ function login(event) {
   showAppForUser(sessionUser, true);
 }
 
-function logout() {
+function openLogoutConfirm() {
+  document.getElementById('logout-modal').classList.add('open');
+}
+
+function closeLogoutConfirm() {
+  document.getElementById('logout-modal').classList.remove('open');
+}
+
+function confirmLogout() {
+  closeLogoutConfirm();
   localStorage.removeItem(SESSION_KEY);
   showLogin();
 }
@@ -1148,6 +1179,10 @@ restoreSession();
 // Close modal on overlay click
 document.getElementById('payment-modal').addEventListener('click', function(e) {
   if (e.target === this) closePayment();
+});
+
+document.getElementById('logout-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeLogoutConfirm();
 });
 
 // ── Service Worker ──
