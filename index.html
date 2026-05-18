@@ -101,6 +101,113 @@
     min-width: 20px;
     text-align: center;
   }
+  .cashier-label { font-size: 13px; color: var(--text2); font-weight: 500; }
+  .logout-btn {
+    padding: 5px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border2);
+    background: white;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text2);
+    cursor: pointer;
+  }
+  .logout-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* ── Login ── */
+  .login-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+    padding: 24px;
+  }
+  .login-screen.hidden { display: none; }
+  .login-panel {
+    width: min(360px, 100%);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 28px;
+  }
+  .login-logo {
+    display: block;
+    height: 64px;
+    width: auto;
+    max-width: 220px;
+    object-fit: contain;
+    margin: 0 auto 22px;
+  }
+  .login-field { margin-bottom: 12px; }
+  .login-field label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin-bottom: 6px;
+  }
+  .login-field input,
+  .customer-input,
+  .order-customer-input {
+    width: 100%;
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    background: white;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    outline: none;
+  }
+  .login-field input {
+    padding: 11px 12px;
+    font-size: 15px;
+  }
+  .login-field input:focus,
+  .customer-input:focus,
+  .order-customer-input:focus { border-color: var(--accent); }
+  .login-error {
+    min-height: 18px;
+    color: var(--danger);
+    font-size: 12px;
+    margin: 2px 0 12px;
+  }
+  .login-btn {
+    width: 100%;
+    padding: 12px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: var(--r);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .welcome-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 250;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(250,250,248,0.88);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+  }
+  .welcome-overlay.show { opacity: 1; }
+  .welcome-text {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(38px, 6vw, 72px);
+    color: var(--accent);
+    text-align: center;
+  }
 
   /* ── Layout ── */
   .app-body { display: flex; flex: 1; overflow: hidden; }
@@ -351,6 +458,12 @@
   .order-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
   .order-num { font-size: 15px; font-weight: 700; }
   .order-time { font-size: 12px; color: var(--text3); }
+  .order-meta { margin-top: 2px; }
+  .order-customer-input {
+    max-width: 170px;
+    padding: 5px 8px;
+    font-size: 12px;
+  }
   .order-status {
     font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px;
   }
@@ -429,6 +542,8 @@
 
   .cash-section { margin-bottom: 20px; }
   .cash-label { font-size: 12px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 8px; }
+  .customer-section { margin-bottom: 16px; }
+  .customer-input { padding: 10px 12px; font-size: 14px; }
   .cash-input {
     width: 100%; padding: 10px 14px;
     border: 1px solid var(--border2); border-radius: 8px;
@@ -483,6 +598,26 @@
 </head>
 <body>
 
+<div class="login-screen" id="login-screen">
+  <form class="login-panel" onsubmit="login(event)">
+    <img src="logo.png" alt="BakerBake" class="login-logo">
+    <div class="login-field">
+      <label for="login-username">Username</label>
+      <input id="login-username" type="text" autocomplete="username" required>
+    </div>
+    <div class="login-field">
+      <label for="login-password">Password</label>
+      <input id="login-password" type="password" autocomplete="current-password" required>
+    </div>
+    <div class="login-error" id="login-error"></div>
+    <button class="login-btn" type="submit">Log In</button>
+  </form>
+</div>
+
+<div class="welcome-overlay" id="welcome-overlay">
+  <div class="welcome-text" id="welcome-text">Welcome</div>
+</div>
+
 <!-- Top bar -->
 <header class="topbar">
   <img src="logo.png" alt="BakerBake" class="topbar-logo">
@@ -493,6 +628,8 @@
     </button>
   </nav>
   <div class="topbar-right">
+    <span class="cashier-label" id="cashier-label"></span>
+    <button class="logout-btn" onclick="logout()">Logout</button>
     <span class="clock" id="clock">--:--</span>
   </div>
 </header>
@@ -527,7 +664,6 @@
       </div>
       <div class="cart-footer">
         <div class="cart-line"><span>Subtotal</span><span id="subtotal">₱0</span></div>
-        <div class="cart-line"><span>Tax (10%)</span><span id="tax-amt">₱0</span></div>
         <div class="cart-total"><span>Total</span><span id="total-amt">₱0</span></div>
         <button class="btn-checkout" id="checkout-btn" disabled onclick="openPayment()">Proceed to Payment</button>
       </div>
@@ -550,6 +686,11 @@
     <h2>Payment</h2>
     <p class="modal-sub" id="pay-item-count">0 items</p>
     <div class="pay-amount" id="pay-amount">₱0</div>
+
+    <div class="customer-section">
+      <div class="cash-label">Customer Name</div>
+      <input class="customer-input" type="text" id="customer-name" placeholder="Walk-in customer">
+    </div>
 
     <div class="pay-methods">
       <button class="pay-method selected" onclick="selectMethod('cash', this)">
@@ -587,7 +728,12 @@
 
 <script>
 const CURRENCY = '₱';
-const TAX = 0.10;
+const STORAGE_KEY = 'bakerbake-pos-state-v1';
+const SESSION_KEY = 'bakerbake-pos-session-v1';
+const CASHIERS = [
+  { username: 'cashier', password: '1234', name: 'Cashier' },
+  { username: 'admin', password: 'admin123', name: 'Admin' }
+];
 
 // imageUrl: set to a file path or URL when you have photos, e.g. 'images/espresso.jpg'
 // Leave as null to keep the placeholder state.
@@ -619,6 +765,84 @@ let orders = [];
 let orderCounter = 1001;
 let activeCategory = 'ALL';
 let payMethod = 'cash';
+let currentUser = null;
+
+function normalizeUsername(value) {
+  return value.trim().toLowerCase();
+}
+
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ cart, orders, orderCounter }));
+}
+
+function loadState() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    if (saved.cart && typeof saved.cart === 'object') cart = saved.cart;
+    if (Array.isArray(saved.orders)) orders = saved.orders;
+    if (Number.isInteger(saved.orderCounter)) orderCounter = saved.orderCounter;
+  } catch {
+    cart = {};
+    orders = [];
+    orderCounter = 1001;
+  }
+}
+
+function showWelcome(name) {
+  const overlay = document.getElementById('welcome-overlay');
+  document.getElementById('welcome-text').textContent = `Welcome, ${name}`;
+  overlay.classList.add('show');
+  setTimeout(() => overlay.classList.remove('show'), 1500);
+}
+
+function showAppForUser(user, showGreeting = false) {
+  currentUser = user;
+  document.getElementById('cashier-label').textContent = user.name;
+  document.getElementById('login-screen').classList.add('hidden');
+  if (showGreeting) showWelcome(user.name);
+}
+
+function showLogin() {
+  currentUser = null;
+  document.getElementById('cashier-label').textContent = '';
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('login-password').value = '';
+  setTimeout(() => document.getElementById('login-username').focus(), 0);
+}
+
+function login(event) {
+  event.preventDefault();
+  const username = normalizeUsername(document.getElementById('login-username').value);
+  const password = document.getElementById('login-password').value;
+  const user = CASHIERS.find(c => c.username === username && c.password === password);
+
+  if (!user) {
+    document.getElementById('login-error').textContent = 'Invalid username or password.';
+    return;
+  }
+
+  const sessionUser = { username: user.username, name: user.name };
+  localStorage.setItem(SESSION_KEY, JSON.stringify(sessionUser));
+  document.getElementById('login-error').textContent = '';
+  showAppForUser(sessionUser, true);
+}
+
+function logout() {
+  localStorage.removeItem(SESSION_KEY);
+  showLogin();
+}
+
+function restoreSession() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+    const user = saved && CASHIERS.find(c => c.username === saved.username);
+    if (user) {
+      showAppForUser({ username: user.username, name: user.name });
+      return;
+    }
+  } catch {}
+  showLogin();
+}
 
 // ── Clock ──
 function tick() {
@@ -694,6 +918,7 @@ function addToCart(id) {
   const p = PRODUCTS.find(x => x.id === id);
   if (!cart[id]) cart[id] = { ...p, qty: 0 };
   cart[id].qty++;
+  saveState();
   renderCart();
   renderCatalog();
 }
@@ -702,12 +927,14 @@ function changeQty(id, delta) {
   if (!cart[id]) return;
   cart[id].qty += delta;
   if (cart[id].qty <= 0) delete cart[id];
+  saveState();
   renderCart();
   renderCatalog();
 }
 
 function clearCart() {
   cart = {};
+  saveState();
   renderCart();
   renderCatalog();
 }
@@ -736,18 +963,15 @@ function renderCart() {
   }
 
   const subtotal = items.reduce((s, i) => s + i.price * i.qty, 0);
-  const taxAmt = Math.round(subtotal * TAX);
-  const total = subtotal + taxAmt;
+  const total = subtotal;
 
   document.getElementById('subtotal').textContent = `${CURRENCY}${subtotal.toLocaleString()}`;
-  document.getElementById('tax-amt').textContent = `${CURRENCY}${taxAmt.toLocaleString()}`;
   document.getElementById('total-amt').textContent = `${CURRENCY}${total.toLocaleString()}`;
   document.getElementById('checkout-btn').disabled = items.length === 0;
 }
 
 function getTotal() {
-  const subtotal = Object.values(cart).reduce((s, i) => s + i.price * i.qty, 0);
-  return subtotal + Math.round(subtotal * TAX);
+  return Object.values(cart).reduce((s, i) => s + i.price * i.qty, 0);
 }
 
 // ── Payment ──
@@ -756,6 +980,7 @@ function openPayment() {
   const itemCount = Object.values(cart).reduce((s, i) => s + i.qty, 0);
   document.getElementById('pay-amount').textContent = `${CURRENCY}${total.toLocaleString()}`;
   document.getElementById('pay-item-count').textContent = `${itemCount} item${itemCount > 1 ? 's':''}`;
+  document.getElementById('customer-name').value = '';
   document.getElementById('cash-input').value = '';
   document.getElementById('change-val').textContent = `${CURRENCY}0`;
 
@@ -800,16 +1025,20 @@ function updateChange() {
 function confirmPayment() {
   const total = getTotal();
   const items = Object.values(cart).map(i => ({ name: i.name, emoji: i.emoji, qty: i.qty, price: i.price }));
+  const customerName = document.getElementById('customer-name').value.trim() || 'Walk-in';
 
   const order = {
     id: orderCounter++,
     items,
     total,
+    customerName,
+    cashier: currentUser ? currentUser.name : 'Unknown',
     status: 'pending',
     time: new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' }),
     method: payMethod
   };
   orders.unshift(order);
+  saveState();
 
   closePayment();
   clearCart();
@@ -831,6 +1060,9 @@ function renderOrders() {
         <div>
           <div class="order-num">#${o.id}</div>
           <div class="order-time">${o.time}</div>
+          <div class="order-meta">
+            <input class="order-customer-input" value="${escapeHTML(o.customerName || 'Walk-in')}" aria-label="Customer name" onchange="updateOrderCustomer(${o.id}, this.value)">
+          </div>
         </div>
         <span class="order-status status-${o.status}">
           ${o.status === 'pending' ? 'Preparing' : o.status === 'ready' ? 'Ready' : 'Done'}
@@ -855,11 +1087,27 @@ function renderOrders() {
   `).join('');
 }
 
+function escapeHTML(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+}
+
+function updateOrderCustomer(id, value) {
+  const o = orders.find(x => x.id === id);
+  if (!o) return;
+  o.customerName = value.trim() || 'Walk-in';
+  saveState();
+}
+
 function advanceOrder(id) {
   const o = orders.find(x => x.id === id);
   if (!o) return;
   if (o.status === 'pending') o.status = 'ready';
   else if (o.status === 'ready') o.status = 'done';
+  saveState();
   renderOrders();
   updatePendingBadge();
 }
@@ -889,8 +1137,13 @@ function showToast(msg) {
 }
 
 // ── Init ──
+loadState();
 buildFilters();
 renderCatalog();
+renderCart();
+renderOrders();
+updatePendingBadge();
+restoreSession();
 
 // Close modal on overlay click
 document.getElementById('payment-modal').addEventListener('click', function(e) {
