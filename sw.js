@@ -1,9 +1,10 @@
-const CACHE_NAME = 'brewpoint-v4';
+const CACHE_NAME = 'bakerbake-v5';
 const ASSETS = [
-  './',
   './index.html',
   './manifest.json',
-  'https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display:ital@0;1&display=swap'
+  './logo.png',
+  './icon-192.png',
+  './icon-512.png'
 ];
 
 self.addEventListener('install', e => {
@@ -21,19 +22,19 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return;
+
   e.respondWith(
-    // 1. Try the network first
     fetch(e.request)
       .then(response => {
-        // 2. If network works, clone the response and save it to cache
-        const resClone = response.clone();
-        caches.open(CACHE_NAME).then(cache => {
-          cache.put(e.request, resClone);
-        });
+        const url = new URL(e.request.url);
+        if (url.origin === self.location.origin && response.ok) {
+          const resClone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(e.request, resClone));
+        }
         return response;
       })
       .catch(() => {
-        // 3. If network fails (offline), look in the cache
         return caches.match(e.request).then(cached => {
           return cached || caches.match('./index.html');
         });

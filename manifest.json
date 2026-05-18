@@ -1,11 +1,13 @@
 {
-  "name": "BrewPoint Café POS",
-  "short_name": "BrewPoint",
+  "name": "BakerBake POS",
+  "short_name": "BakerBake",
   "description": "Café point-of-sale system",
-  "start_url": "/index.html",
+  "id": "./index.html",
+  "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#FAFAF8",
-  "theme_color": "#2D5016",
+  "theme_color": "#1A1A1A",
   "orientation": "landscape",
   "icons": [
     {
