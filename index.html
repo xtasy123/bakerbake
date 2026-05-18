@@ -440,14 +440,26 @@
   /* ══════════════════════════════════════
      VIEW: Orders
   ══════════════════════════════════════ */
-  #view-orders { padding: 24px; flex-direction: column; overflow-y: auto; }
-  #view-orders h1 { font-size: 20px; font-weight: 600; margin-bottom: 20px; }
+  #view-orders { padding: 24px; flex-direction: column; overflow-y: auto; gap: 22px; }
+  #view-orders h1 { font-size: 20px; font-weight: 600; }
+  .orders-panel { display: flex; flex-direction: column; gap: 12px; }
+  .orders-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+  }
+  .orders-panel-header h2 { font-size: 15px; font-weight: 700; }
+  .orders-count { font-size: 12px; color: var(--text3); font-weight: 600; }
 
   .orders-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     gap: 12px;
+    align-items: start;
   }
+  .orders-empty { color: var(--text3); font-size: 14px; }
 
   .order-card {
     background: var(--surface);
@@ -683,9 +695,24 @@
   <!-- ── VIEW: Orders ── -->
   <div id="view-orders" class="view">
     <h1>Orders</h1>
-    <div class="orders-grid" id="orders-grid">
-      <p style="color:var(--text3); font-size:14px;">No orders yet.</p>
-    </div>
+    <section class="orders-panel">
+      <div class="orders-panel-header">
+        <h2>Pending</h2>
+        <span class="orders-count" id="pending-orders-count">0 orders</span>
+      </div>
+      <div class="orders-grid" id="pending-orders-grid">
+        <p class="orders-empty">No pending orders.</p>
+      </div>
+    </section>
+    <section class="orders-panel">
+      <div class="orders-panel-header">
+        <h2>Completed</h2>
+        <span class="orders-count" id="completed-orders-count">0 orders</span>
+      </div>
+      <div class="orders-grid" id="completed-orders-grid">
+        <p class="orders-empty">No completed orders.</p>
+      </div>
+    </section>
   </div>
 
 </main>
@@ -1005,6 +1032,19 @@ function getTotal() {
   return Object.values(cart).reduce((s, i) => s + i.price * i.qty, 0);
 }
 
+function formatOrderDateTime(order) {
+  if (order.createdAt) {
+    return new Date(order.createdAt).toLocaleString('en-PH', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+  return order.date ? `${order.date} ${order.time || ''}` : (order.time || '');
+}
+
 // ── Payment ──
 function openPayment() {
   const total = getTotal();
@@ -1057,6 +1097,7 @@ function confirmPayment() {
   const total = getTotal();
   const items = Object.values(cart).map(i => ({ name: i.name, emoji: i.emoji, qty: i.qty, price: i.price }));
   const customerName = document.getElementById('customer-name').value.trim() || 'Walk-in';
+  const now = new Date();
 
   const order = {
     id: orderCounter++,
@@ -1065,7 +1106,9 @@ function confirmPayment() {
     customerName,
     cashier: currentUser ? currentUser.name : 'Unknown',
     status: 'pending',
-    time: new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' }),
+    createdAt: now.toISOString(),
+    date: now.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }),
+    time: now.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' }),
     method: payMethod
   };
   orders.unshift(order);
@@ -1080,23 +1123,36 @@ function confirmPayment() {
 
 // ── Orders ──
 function renderOrders() {
-  const el = document.getElementById('orders-grid');
-  if (orders.length === 0) {
-    el.innerHTML = `<p style="color:var(--text3); font-size:14px;">No orders yet.</p>`;
-    return;
-  }
-  el.innerHTML = orders.map(o => `
+  const pending = orders.filter(o => o.status !== 'done');
+  const completed = orders.filter(o => o.status === 'done');
+  const pendingGrid = document.getElementById('pending-orders-grid');
+  const completedGrid = document.getElementById('completed-orders-grid');
+
+  document.getElementById('pending-orders-count').textContent = `${pending.length} order${pending.length === 1 ? '' : 's'}`;
+  document.getElementById('completed-orders-count').textContent = `${completed.length} order${completed.length === 1 ? '' : 's'}`;
+
+  pendingGrid.innerHTML = pending.length
+    ? pending.map(orderCardHTML).join('')
+    : `<p class="orders-empty">No pending orders.</p>`;
+
+  completedGrid.innerHTML = completed.length
+    ? completed.map(orderCardHTML).join('')
+    : `<p class="orders-empty">No completed orders.</p>`;
+}
+
+function orderCardHTML(o) {
+  return `
     <div class="order-card" id="order-${o.id}">
       <div class="order-card-header">
         <div>
           <div class="order-num">#${o.id}</div>
-          <div class="order-time">${o.time}</div>
+          <div class="order-time">${formatOrderDateTime(o)}</div>
           <div class="order-meta">
             <input class="order-customer-input" value="${escapeHTML(o.customerName || 'Walk-in')}" aria-label="Customer name" onchange="updateOrderCustomer(${o.id}, this.value)">
           </div>
         </div>
         <span class="order-status status-${o.status}">
-          ${o.status === 'pending' ? 'Preparing' : o.status === 'ready' ? 'Ready' : 'Done'}
+          ${o.status === 'done' ? 'Completed' : 'Pending'}
         </span>
       </div>
       <div class="order-items-list">
@@ -1108,14 +1164,12 @@ function renderOrders() {
       </div>
       <div class="order-card-footer">
         <div class="order-total">${CURRENCY}${o.total.toLocaleString()}</div>
-        ${o.status === 'pending'
-          ? `<button class="order-action-btn ready" onclick="advanceOrder(${o.id})">Mark Ready</button>`
-          : o.status === 'ready'
-          ? `<button class="order-action-btn" onclick="advanceOrder(${o.id})">Complete</button>`
+        ${o.status !== 'done'
+          ? `<button class="order-action-btn ready" onclick="completeOrder(${o.id})">Complete</button>`
           : `<span style="font-size:12px; color:var(--text3)">Completed</span>`}
       </div>
     </div>
-  `).join('');
+  `;
 }
 
 function escapeHTML(value) {
@@ -1133,11 +1187,10 @@ function updateOrderCustomer(id, value) {
   saveState();
 }
 
-function advanceOrder(id) {
+function completeOrder(id) {
   const o = orders.find(x => x.id === id);
   if (!o) return;
-  if (o.status === 'pending') o.status = 'ready';
-  else if (o.status === 'ready') o.status = 'done';
+  o.status = 'done';
   saveState();
   renderOrders();
   updatePendingBadge();
