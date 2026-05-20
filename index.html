@@ -945,7 +945,7 @@ function bindImageFallbacks(scope = document) {
 
 function productCardHTML(p) {
   const qty = cart[p.id] ? cart[p.id].qty : 0;
-  return `<div class="product-card ${qty > 0 ? 'has-items':''}" onclick="addToCart(${p.id})">
+  return `<div class="product-card ${qty > 0 ? 'has-items':''}" data-product-id="${p.id}" onclick="addToCart(${p.id})">
     ${cardImgHTML(p.imageUrl)}
     <div class="name">${p.name}</div>
     <div class="price">${CURRENCY}${p.price.toLocaleString()}</div>
@@ -971,6 +971,16 @@ function renderCatalog() {
   bindImageFallbacks(grid);
 }
 
+function refreshCatalogBadges() {
+  document.querySelectorAll('.product-card[data-product-id]').forEach(card => {
+    const id = card.dataset.productId;
+    const qty = cart[id] ? cart[id].qty : 0;
+    card.classList.toggle('has-items', qty > 0);
+    const badge = card.querySelector('.in-cart');
+    if (badge) badge.textContent = qty > 0 ? qty : '';
+  });
+}
+
 // ── Cart ──
 function addToCart(id) {
   const p = PRODUCTS.find(x => x.id === id);
@@ -978,7 +988,7 @@ function addToCart(id) {
   cart[id].qty++;
   saveState();
   renderCart();
-  renderCatalog();
+  refreshCatalogBadges();
 }
 
 function changeQty(id, delta) {
@@ -987,14 +997,14 @@ function changeQty(id, delta) {
   if (cart[id].qty <= 0) delete cart[id];
   saveState();
   renderCart();
-  renderCatalog();
+  refreshCatalogBadges();
 }
 
 function clearCart() {
   cart = {};
   saveState();
   renderCart();
-  renderCatalog();
+  refreshCatalogBadges();
 }
 
 function renderCart() {
