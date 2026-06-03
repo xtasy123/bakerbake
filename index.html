@@ -614,6 +614,35 @@
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+  .size-product-name {
+    font-size: 14px;
+    color: var(--text2);
+    margin-bottom: 16px;
+  }
+  .size-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .size-option-btn {
+    min-height: 76px;
+    border: 1px solid var(--border2);
+    border-radius: var(--r);
+    background: white;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+  }
+  .size-option-btn:hover { border-color: var(--accent); background: var(--accent-light); }
+  .size-option-btn .size-label { font-size: 18px; font-weight: 700; }
+  .size-option-btn .size-price { font-size: 13px; color: var(--text2); font-weight: 600; }
+
   /* scrollbar global */
   * { scrollbar-width: thin; scrollbar-color: var(--border2) transparent; }
 
@@ -963,6 +992,18 @@
   </div>
 </div>
 
+<!-- Size Picker Modal -->
+<div class="modal-overlay compact" id="size-modal">
+  <div class="modal">
+    <h2>Select Size</h2>
+    <p class="size-product-name" id="size-product-name"></p>
+    <div class="size-options" id="size-options"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeSizePicker()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- Logout Confirmation Modal -->
 <div class="modal-overlay compact" id="logout-modal">
   <div class="modal">
@@ -989,17 +1030,18 @@ const CASHIERS = [
 // imageUrl: set to a file path or URL when you have photos, e.g. 'images/espresso.jpg'
 // Leave as null to keep the placeholder state.
 const PRODUCTS = [
-  { id:1,  name:'Espresso',                filter:'HOT',    subgroup:null,      imageUrl:'images/espresso.webp', price:110 },
-  { id:2,  name:'Americano',               filter:'HOT',    subgroup:null,      imageUrl:'images/americano.avif', price:130 },
-  { id:3,  name:'Espresso Macchiato',      filter:'HOT',    subgroup:null,      imageUrl:'images/espresso-mach.avif', price:140 },
-  { id:4,  name:'Flat White',              filter:'HOT',    subgroup:null,      imageUrl:'images/flat-white.avif', price:150 },
-  { id:5,  name:'Cappuccino',              filter:'HOT',    subgroup:null,      imageUrl:'images/cappucino.avif', price:150 },
-  { id:6,  name:'Caffe Latte',             filter:'HOT',    subgroup:null,      imageUrl:'images/caffe-latte.avif', price:155 },
-  { id:7,  name:'Spanish Latte',           filter:'HOT',    subgroup:null,      imageUrl:'images/spanish-latte.jpg', price:160 },
-  { id:8,  name:'Iced Americano',          filter:'COLD',   subgroup:null,      imageUrl:'images/iced-ame.jpg', price:140 },
-  { id:9,  name:'Iced Flat White',         filter:'COLD',   subgroup:null,      imageUrl:'images/iced-flat.webp', price:160 },
-  { id:10, name:'Iced Caffe Latte',        filter:'COLD',   subgroup:null,      imageUrl:'images/iced-caffe.jpg', price:165 },
-  { id:11, name:'Iced Spanish Latte',      filter:'COLD',   subgroup:null,      imageUrl:'images/iced-spanish.jpg', price:170 },
+  { id:1,  name:'Espresso',                filter:'HOT',    subgroup:null,      imageUrl:'images/espresso.webp', variants:[{ id:'8oz', label:'8oz', price:70 }] },
+  { id:2,  name:'Espresso Macchiato',      filter:'HOT',    subgroup:null,      imageUrl:'images/espresso-mach.avif', variants:[{ id:'8oz', label:'8oz', price:80 }] },
+  { id:3,  name:'Americano',               filter:'HOT',    subgroup:null,      imageUrl:'images/americano.avif', variants:[{ id:'8oz', label:'8oz', price:90 }, { id:'12oz', label:'12oz', price:100 }] },
+  { id:4,  name:'Flat White',              filter:'HOT',    subgroup:null,      imageUrl:'images/flat-white.avif', variants:[{ id:'8oz', label:'8oz', price:120 }, { id:'12oz', label:'12oz', price:140 }] },
+  { id:5,  name:'Cappuccino',              filter:'HOT',    subgroup:null,      imageUrl:'images/cappucino.avif', variants:[{ id:'8oz', label:'8oz', price:110 }, { id:'12oz', label:'12oz', price:130 }] },
+  { id:6,  name:'Caffe Latte',             filter:'HOT',    subgroup:null,      imageUrl:'images/caffe-latte.avif', variants:[{ id:'8oz', label:'8oz', price:120 }, { id:'12oz', label:'12oz', price:140 }] },
+  { id:7,  name:'Spanish Latte',           filter:'HOT',    subgroup:null,      imageUrl:'images/spanish-latte.jpg', variants:[{ id:'8oz', label:'8oz', price:130 }, { id:'12oz', label:'12oz', price:150 }] },
+  { id:8,  name:'Iced Americano',          filter:'COLD',   subgroup:null,      imageUrl:'images/iced-ame.jpg', variants:[{ id:'8oz', label:'8oz', price:100 }, { id:'12oz', label:'12oz', price:110 }] },
+  { id:9,  name:'Iced Flat White',         filter:'COLD',   subgroup:null,      imageUrl:'images/iced-flat.webp', variants:[{ id:'8oz', label:'8oz', price:130 }, { id:'12oz', label:'12oz', price:150 }] },
+  { id:10, name:'Iced Cappuccino',         filter:'COLD',   subgroup:null,      imageUrl:'images/cappucino.avif', variants:[{ id:'8oz', label:'8oz', price:120 }, { id:'12oz', label:'12oz', price:140 }] },
+  { id:11, name:'Iced Caffe Latte',        filter:'COLD',   subgroup:null,      imageUrl:'images/iced-caffe.jpg', variants:[{ id:'8oz', label:'8oz', price:130 }, { id:'12oz', label:'12oz', price:150 }] },
+  { id:20, name:'Iced Spanish Latte',      filter:'COLD',   subgroup:null,      imageUrl:'images/iced-spanish.jpg', variants:[{ id:'8oz', label:'8oz', price:140 }, { id:'12oz', label:'12oz', price:160 }] },
   { id:12, name:'Biscoff Cookie',          filter:'PASTRY', subgroup:'Cookies', imageUrl:'images/biscoff.png', price:85  },
   { id:13, name:'Matcha Cookie',           filter:'PASTRY', subgroup:'Cookies', imageUrl:'images/matcha.png', price:85  },
   { id:14, name:'Chocolate Oatmeal Cookie',filter:'PASTRY', subgroup:'Cookies', imageUrl:'images/chocolate-oatmeal.png', price:85  },
@@ -1017,6 +1059,7 @@ let orderCounter = 1001;
 let activeCategory = 'ALL';
 let payMethod = 'cash';
 let currentUser = null;
+let pendingSizeProductId = null;
 
 function normalizeUsername(value) {
   return value.trim().toLowerCase();
@@ -1032,11 +1075,38 @@ function loadState() {
     if (saved.cart && typeof saved.cart === 'object') cart = saved.cart;
     if (Array.isArray(saved.orders)) orders = saved.orders;
     if (Number.isInteger(saved.orderCounter)) orderCounter = saved.orderCounter;
+    migrateCart();
   } catch {
     cart = {};
     orders = [];
     orderCounter = 1001;
   }
+}
+
+function migrateCart() {
+  const migrated = {};
+  Object.entries(cart).forEach(([key, item]) => {
+    const productId = item.productId || item.id;
+    const product = PRODUCTS.find(p => p.id === productId);
+    if (!product) return;
+
+    const variant = item.variantId && product.variants
+      ? product.variants.find(v => v.id === item.variantId)
+      : null;
+    if (product.variants && !variant) return;
+    const nextKey = item.key || getCartKey(productId, variant ? variant.id : 'single');
+
+    migrated[nextKey] = {
+      key: nextKey,
+      productId,
+      name: item.name || product.name,
+      size: item.size || (variant ? variant.label : null),
+      variantId: item.variantId || (variant ? variant.id : null),
+      price: item.price || (variant ? variant.price : product.price),
+      qty: item.qty || 0
+    };
+  });
+  cart = migrated;
 }
 
 function showWelcome(name) {
@@ -1147,11 +1217,14 @@ function bindImageFallbacks(scope = document) {
 }
 
 function productCardHTML(p) {
-  const qty = cart[p.id] ? cart[p.id].qty : 0;
+  const qty = getProductQty(p.id);
+  const priceText = p.variants
+    ? `${CURRENCY}${p.variants[0].price.toLocaleString()}${p.variants.length > 1 ? '+' : ''}`
+    : `${CURRENCY}${p.price.toLocaleString()}`;
   return `<div class="product-card ${qty > 0 ? 'has-items':''}" data-product-id="${p.id}" onclick="addToCart(${p.id})">
     ${cardImgHTML(p.imageUrl)}
     <div class="name">${p.name}</div>
-    <div class="price">${CURRENCY}${p.price.toLocaleString()}</div>
+    <div class="price">${priceText}</div>
     <div class="in-cart">${qty > 0 ? qty : ''}</div>
   </div>`;
 }
@@ -1176,8 +1249,7 @@ function renderCatalog() {
 
 function refreshCatalogBadges() {
   document.querySelectorAll('.product-card[data-product-id]').forEach(card => {
-    const id = card.dataset.productId;
-    const qty = cart[id] ? cart[id].qty : 0;
+    const qty = getProductQty(card.dataset.productId);
     card.classList.toggle('has-items', qty > 0);
     const badge = card.querySelector('.in-cart');
     if (badge) badge.textContent = qty > 0 ? qty : '';
@@ -1187,17 +1259,74 @@ function refreshCatalogBadges() {
 // ── Cart ──
 function addToCart(id) {
   const p = PRODUCTS.find(x => x.id === id);
-  if (!cart[id]) cart[id] = { ...p, qty: 0 };
-  cart[id].qty++;
+  if (!p) return;
+  if (p.variants) {
+    openSizePicker(id);
+    return;
+  }
+  addLineItem(p);
+}
+
+function getProductQty(productId) {
+  return Object.values(cart).reduce((sum, item) => (
+    String(item.productId || item.id) === String(productId) ? sum + item.qty : sum
+  ), 0);
+}
+
+function getCartKey(productId, variantId = 'single') {
+  return `${productId}:${variantId}`;
+}
+
+function addLineItem(product, variant = null) {
+  const key = getCartKey(product.id, variant ? variant.id : 'single');
+  if (!cart[key]) {
+    cart[key] = {
+      key,
+      productId: product.id,
+      name: product.name,
+      size: variant ? variant.label : null,
+      variantId: variant ? variant.id : null,
+      price: variant ? variant.price : product.price,
+      qty: 0
+    };
+  }
+  cart[key].qty++;
   saveState();
   renderCart();
   refreshCatalogBadges();
 }
 
-function changeQty(id, delta) {
-  if (!cart[id]) return;
-  cart[id].qty += delta;
-  if (cart[id].qty <= 0) delete cart[id];
+function openSizePicker(productId) {
+  const p = PRODUCTS.find(x => x.id === productId);
+  if (!p || !p.variants) return;
+  pendingSizeProductId = productId;
+  document.getElementById('size-product-name').textContent = p.name;
+  document.getElementById('size-options').innerHTML = p.variants.map(v => `
+    <button class="size-option-btn" onclick="selectSize('${v.id}')">
+      <span class="size-label">${v.label}</span>
+      <span class="size-price">${CURRENCY}${v.price.toLocaleString()}</span>
+    </button>
+  `).join('');
+  document.getElementById('size-modal').classList.add('open');
+}
+
+function closeSizePicker() {
+  pendingSizeProductId = null;
+  document.getElementById('size-modal').classList.remove('open');
+}
+
+function selectSize(variantId) {
+  const p = PRODUCTS.find(x => x.id === pendingSizeProductId);
+  const variant = p && p.variants ? p.variants.find(v => v.id === variantId) : null;
+  if (!p || !variant) return;
+  addLineItem(p, variant);
+  closeSizePicker();
+}
+
+function changeQty(key, delta) {
+  if (!cart[key]) return;
+  cart[key].qty += delta;
+  if (cart[key].qty <= 0) delete cart[key];
   saveState();
   renderCart();
   refreshCatalogBadges();
@@ -1220,13 +1349,13 @@ function renderCart() {
     el.innerHTML = items.map(item => `
       <div class="cart-item">
         <div class="ci-info">
-          <div class="ci-name">${item.name}</div>
+          <div class="ci-name">${item.name}${item.size ? ` · ${item.size}` : ''}</div>
           <div class="ci-unit">${CURRENCY}${item.price.toLocaleString()}</div>
         </div>
         <div class="ci-qty">
-          <button class="qty-btn" onclick="changeQty(${item.id}, -1)">−</button>
+          <button class="qty-btn" onclick="changeQty('${item.key || getCartKey(item.productId || item.id, item.variantId || 'single')}', -1)">−</button>
           <span class="qty-num">${item.qty}</span>
-          <button class="qty-btn" onclick="changeQty(${item.id}, 1)">+</button>
+          <button class="qty-btn" onclick="changeQty('${item.key || getCartKey(item.productId || item.id, item.variantId || 'single')}', 1)">+</button>
         </div>
         <div class="ci-subtotal">${CURRENCY}${(item.price * item.qty).toLocaleString()}</div>
       </div>
@@ -1315,7 +1444,13 @@ function updateChange() {
 
 function confirmPayment() {
   const total = getTotal();
-  const items = Object.values(cart).map(i => ({ name: i.name, emoji: i.emoji, qty: i.qty, price: i.price }));
+  const items = Object.values(cart).map(i => ({
+    name: i.name,
+    size: i.size || null,
+    variantId: i.variantId || null,
+    qty: i.qty,
+    price: i.price
+  }));
   const customerName = document.getElementById('customer-name').value.trim() || 'Walk-in';
   const now = new Date();
 
@@ -1379,7 +1514,7 @@ function orderCardHTML(o) {
       <div class="order-items-list">
         ${o.items.map(i => `
           <div class="order-item-row">
-            <span>${i.name}</span>
+            <span>${i.name}${i.size ? ` · ${i.size}` : ''}</span>
             <span class="qty">×${i.qty}</span>
           </div>`).join('')}
       </div>
@@ -1492,6 +1627,10 @@ restoreSession();
 // Close modal on overlay click
 document.getElementById('payment-modal').addEventListener('click', function(e) {
   if (e.target === this) closePayment();
+});
+
+document.getElementById('size-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeSizePicker();
 });
 
 document.getElementById('logout-modal').addEventListener('click', function(e) {
