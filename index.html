@@ -557,7 +557,7 @@
 
   .pay-methods { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 24px; }
   .pay-method {
-    padding: 12px;
+    padding: 10px 12px;
     border-radius: 10px;
     border: 1.5px solid var(--border);
     background: white;
@@ -566,23 +566,39 @@
     transition: all 0.15s;
     font-family: 'DM Sans', sans-serif;
     font-size: 13px; font-weight: 500; color: var(--text);
+    min-height: 74px;
   }
   .pay-method:hover { border-color: var(--accent); color: var(--accent); }
-  .pay-method.selected { border-color: var(--accent); background: var(--accent-light); color: var(--accent); }
+  .pay-method.selected {
+    border-color: var(--accent);
+    background: var(--accent-light);
+    color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
   .pay-method .method-icon {
-    min-height: 30px;
+    min-height: 34px;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-bottom: 6px;
-    font-size: 22px;
+    margin-bottom: 5px;
+    font-size: 20px;
     font-weight: 800;
   }
   .method-logo {
     display: block;
-    width: 86px;
-    height: 30px;
+    width: 110px;
+    height: 34px;
     object-fit: contain;
+  }
+  .cash-mark {
+    width: 42px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent);
+    font-size: 22px;
+    font-weight: 800;
   }
 
   .cash-section { margin-bottom: 20px; }
@@ -602,7 +618,8 @@
 
   .quick-cash { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
   .quick-cash-btn {
-    padding: 5px 12px; border-radius: 20px; border: 1px solid var(--border2);
+    min-height: 32px;
+    padding: 6px 13px; border-radius: 20px; border: 1px solid var(--border2);
     background: white; font-size: 12px; font-weight: 500; cursor: pointer;
     font-family: 'DM Sans', sans-serif;
     transition: all 0.15s;
@@ -985,7 +1002,7 @@
 
     <div class="pay-methods">
       <button class="pay-method selected" onclick="selectMethod('cash', this)">
-        <span class="method-icon">₱</span>Cash
+        <span class="method-icon"><span class="cash-mark">₱</span></span>Cash
       </button>
       <button class="pay-method" onclick="selectMethod('bpi', this)">
         <span class="method-icon"><img class="method-logo" src="images/bpi.png" alt="BPI"></span>BPI
@@ -1463,6 +1480,7 @@ function openPayment() {
   document.getElementById('cash-section').style.display = '';
   document.getElementById('reference-section').style.display = 'none';
   document.querySelectorAll('.pay-method').forEach((b,i) => b.classList.toggle('selected', i===0));
+  updateChange();
   document.getElementById('payment-modal').classList.add('open');
 }
 
@@ -1477,7 +1495,6 @@ function selectMethod(m, btn) {
   btn.classList.add('selected');
   document.getElementById('cash-section').style.display = method.type === 'cash' ? '' : 'none';
   document.getElementById('reference-section').style.display = method.type === 'cash' ? 'none' : '';
-  document.getElementById('confirm-btn').disabled = false;
   updateChange();
 }
 
