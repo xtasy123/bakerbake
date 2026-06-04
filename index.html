@@ -791,15 +791,31 @@
     margin-bottom: 1px;
   }
   .cash-mark {
-    width: 42px;
-    height: 34px;
+    position: relative;
+    width: 46px;
+    height: 28px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    border: 2px solid var(--accent);
+    border-radius: 6px;
     color: var(--accent);
-    font-size: 22px;
+    background: #f3fbf6;
+    font-size: 18px;
     font-weight: 800;
   }
+  .cash-mark::before,
+  .cash-mark::after {
+    content: '';
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    border: 2px solid var(--accent);
+    border-radius: 50%;
+    opacity: 0.8;
+  }
+  .cash-mark::before { left: 5px; }
+  .cash-mark::after { right: 5px; }
 
   .cash-section { margin-bottom: 20px; }
   .cash-label { font-size: 12px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 8px; }
@@ -2151,14 +2167,24 @@ function isTodayOrder(order) {
 
 function orderMatchesQuery(order, query) {
   const payment = getOrderPayment(order);
+  const paymentQueryMap = {
+    cash: 'cash',
+    bpi: 'bpi',
+    union: 'unionbank',
+    unionbank: 'unionbank',
+    gcash: 'gcash'
+  };
+
+  if (paymentQueryMap[query]) {
+    return payment.method === paymentQueryMap[query];
+  }
+
   const haystack = [
     `#${order.id}`,
     order.id,
     order.customerName,
     order.cashier,
     order.status === 'done' ? 'completed' : 'pending',
-    payment.label,
-    payment.method,
     payment.reference,
     formatOrderDateTime(order),
     ...(order.items || []).flatMap(item => [item.name, item.size])
