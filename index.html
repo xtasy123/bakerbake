@@ -482,6 +482,13 @@
     letter-spacing: 0.06em;
     margin-bottom: 2px;
   }
+  .orders-stat .label .pay-word {
+    font-weight: 800;
+  }
+  .pay-word.cash { color: #118044; }
+  .pay-word.bpi { color: #b41f2a; }
+  .pay-word.unionbank { color: #d96b00; }
+  .pay-word.gcash { color: #1167d8; }
   .orders-stat .value {
     color: var(--text);
     font-size: 15px;
@@ -1088,22 +1095,22 @@
           <span class="value" id="orders-stat-sales">₱0</span>
         </div>
         <div class="orders-stat">
-          <span class="label">Cash Orders</span>
+          <span class="label"><span class="pay-word cash">Cash</span> Orders</span>
           <span class="value" id="orders-stat-cash-count">0</span>
           <span class="subvalue" id="orders-stat-cash">₱0</span>
         </div>
         <div class="orders-stat">
-          <span class="label">BPI Orders</span>
+          <span class="label"><span class="pay-word bpi">BPI</span> Orders</span>
           <span class="value" id="orders-stat-bpi-count">0</span>
           <span class="subvalue" id="orders-stat-bpi">₱0</span>
         </div>
         <div class="orders-stat">
-          <span class="label">UnionBank Orders</span>
+          <span class="label"><span class="pay-word unionbank">UnionBank</span> Orders</span>
           <span class="value" id="orders-stat-unionbank-count">0</span>
           <span class="subvalue" id="orders-stat-unionbank">₱0</span>
         </div>
         <div class="orders-stat">
-          <span class="label">GCash Orders</span>
+          <span class="label"><span class="pay-word gcash">GCash</span> Orders</span>
           <span class="value" id="orders-stat-gcash-count">0</span>
           <span class="subvalue" id="orders-stat-gcash">₱0</span>
         </div>
