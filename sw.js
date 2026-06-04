@@ -1,10 +1,13 @@
-const CACHE_NAME = 'bakerbake-v15';
+const CACHE_NAME = 'bakerbake-v16';
 const ASSETS = [
   './index.html',
   './manifest.json',
   './logo.png',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  './images/bpi.png',
+  './images/ub.png',
+  './images/gcash.png'
 ];
 
 self.addEventListener('install', e => {
