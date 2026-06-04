@@ -585,6 +585,122 @@
   .order-action-btn.ready:hover { background: #333333; }
 
   /* ══════════════════════════════════════
+     VIEW: Reports
+  ══════════════════════════════════════ */
+  #view-reports {
+    padding: 24px;
+    flex-direction: column;
+    overflow-y: auto;
+    gap: 18px;
+  }
+  #view-reports h1 { font-size: 20px; font-weight: 600; }
+  .reports-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(140px, 1fr));
+    gap: 10px;
+  }
+  .report-card,
+  .report-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .report-card {
+    padding: 13px 14px;
+    min-height: 72px;
+  }
+  .report-card .label {
+    display: block;
+    color: var(--text3);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 5px;
+  }
+  .report-card .value {
+    display: block;
+    color: var(--text);
+    font-size: 21px;
+    font-weight: 800;
+  }
+  .report-card .hint {
+    display: block;
+    color: var(--text3);
+    font-size: 12px;
+    font-weight: 600;
+    margin-top: 3px;
+  }
+  .report-sections {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    align-items: start;
+  }
+  .report-panel {
+    padding: 16px;
+  }
+  .report-panel h2 {
+    font-size: 15px;
+    font-weight: 800;
+    margin-bottom: 12px;
+  }
+  .report-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+    align-items: center;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .report-row:last-child { border-bottom: 0; }
+  .report-row .name { font-weight: 700; color: var(--text); }
+  .report-row .meta { color: var(--text3); font-size: 12px; margin-top: 2px; }
+  .report-row .amount { font-weight: 800; text-align: right; color: var(--text); }
+  .report-empty { color: var(--text3); font-size: 14px; }
+  .closeout-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .closeout-field label {
+    display: block;
+    color: var(--text3);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
+  }
+  .closeout-input {
+    width: 100%;
+    min-height: 42px;
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 9px 11px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    outline: none;
+  }
+  .closeout-input:focus { border-color: var(--accent); }
+  .closeout-result {
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+    display: grid;
+    gap: 8px;
+  }
+  .closeout-result div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 13px;
+  }
+  .closeout-result strong { font-weight: 800; }
+
+  /* ══════════════════════════════════════
      MODAL: Payment
   ══════════════════════════════════════ */
   .modal-overlay {
@@ -958,6 +1074,27 @@
     .order-customer-input { max-width: 150px; min-height: 34px; }
     .order-action-btn { min-height: 40px; }
 
+    #view-reports {
+      height: 100%;
+      padding: 16px 12px 24px;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      gap: 16px;
+    }
+    .reports-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .report-card {
+      min-height: 78px;
+      padding: 12px;
+    }
+    .report-card .value { font-size: 19px; }
+    .report-sections {
+      grid-template-columns: 1fr;
+    }
+    .report-panel { padding: 14px; }
+    .closeout-form { grid-template-columns: 1fr; }
+
     .modal-overlay {
       align-items: stretch;
       justify-content: stretch;
@@ -1032,6 +1169,7 @@
     <button class="nav-btn" onclick="showView('orders', this)">
       Orders <span id="pending-badge" class="badge" style="display:none">0</span>
     </button>
+    <button class="nav-btn" onclick="showView('reports', this)">Reports</button>
   </nav>
   <div class="topbar-right">
     <span class="cashier-label" id="cashier-label"></span>
@@ -1140,6 +1278,75 @@
     </section>
   </div>
 
+  <!-- ── VIEW: Reports ── -->
+  <div id="view-reports" class="view">
+    <h1>Reports</h1>
+    <div class="reports-grid" aria-label="Daily report summary">
+      <div class="report-card">
+        <span class="label">Today Sales</span>
+        <span class="value" id="report-sales">₱0</span>
+        <span class="hint" id="report-sales-count">0 orders</span>
+      </div>
+      <div class="report-card">
+        <span class="label">Average Order</span>
+        <span class="value" id="report-average">₱0</span>
+        <span class="hint">today</span>
+      </div>
+      <div class="report-card">
+        <span class="label">Cash Expected</span>
+        <span class="value" id="report-cash-expected">₱0</span>
+        <span class="hint" id="report-cash-count">0 cash orders</span>
+      </div>
+      <div class="report-card">
+        <span class="label">Completed</span>
+        <span class="value" id="report-completed">0</span>
+        <span class="hint" id="report-pending">0 pending</span>
+      </div>
+    </div>
+
+    <div class="report-sections">
+      <section class="report-panel">
+        <h2>Payment Breakdown</h2>
+        <div id="report-payment-breakdown">
+          <p class="report-empty">No payments today.</p>
+        </div>
+      </section>
+
+      <section class="report-panel">
+        <h2>Top Products</h2>
+        <div id="report-top-products">
+          <p class="report-empty">No products sold today.</p>
+        </div>
+      </section>
+
+      <section class="report-panel">
+        <h2>End-of-Day Closeout</h2>
+        <div class="closeout-form">
+          <div class="closeout-field">
+            <label for="actual-cash-input">Actual Cash</label>
+            <input class="closeout-input" id="actual-cash-input" type="number" min="0" inputmode="decimal" placeholder="0" oninput="renderReports()">
+          </div>
+          <div class="closeout-field">
+            <label for="closeout-note-input">Note</label>
+            <input class="closeout-input" id="closeout-note-input" type="text" placeholder="Optional note">
+          </div>
+        </div>
+        <div class="closeout-result">
+          <div><span>Expected Cash</span><strong id="closeout-expected">₱0</strong></div>
+          <div><span>Actual Cash</span><strong id="closeout-actual">₱0</strong></div>
+          <div><span>Difference</span><strong id="closeout-difference">₱0</strong></div>
+        </div>
+      </section>
+
+      <section class="report-panel">
+        <h2>Order Status</h2>
+        <div id="report-status-breakdown">
+          <p class="report-empty">No orders today.</p>
+        </div>
+      </section>
+    </div>
+  </div>
+
 </main>
 
 <nav class="mobile-bottom-nav" aria-label="Primary mobile navigation">
@@ -1154,6 +1361,10 @@
   <button class="mobile-nav-btn" data-mobile-section="orders" onclick="showMobileSection('orders', this)">
     <span class="nav-icon">✓</span>
     <span>Orders</span>
+  </button>
+  <button class="mobile-nav-btn" data-mobile-section="reports" onclick="showMobileSection('reports', this)">
+    <span class="nav-icon">▦</span>
+    <span>Reports</span>
   </button>
 </nav>
 
@@ -1729,6 +1940,7 @@ function confirmPayment() {
   closePayment();
   clearCart();
   renderOrders();
+  renderReports();
   updatePendingBadge();
   showMobileSection('orders');
   showToast(`Order #${order.id} placed ✓`);
@@ -1789,6 +2001,95 @@ function renderOrderSummary(pending, completed) {
     document.getElementById(`orders-stat-${method.id}-count`).textContent = stat.count;
     document.getElementById(`orders-stat-${method.id}`).textContent = formatMoney(stat.amount);
   });
+}
+
+function getTodayOrders() {
+  return orders.filter(isTodayOrder);
+}
+
+function renderReports() {
+  const todayOrders = getTodayOrders();
+  const completed = todayOrders.filter(o => o.status === 'done');
+  const pending = todayOrders.filter(o => o.status !== 'done');
+  const totalSales = todayOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
+  const average = todayOrders.length ? Math.round(totalSales / todayOrders.length) : 0;
+
+  const paymentStats = PAYMENT_METHODS.reduce((acc, method) => {
+    acc[method.id] = { ...method, count: 0, amount: 0 };
+    return acc;
+  }, {});
+  const productStats = {};
+
+  todayOrders.forEach(order => {
+    const payment = getOrderPayment(order);
+    if (paymentStats[payment.method]) {
+      paymentStats[payment.method].count += 1;
+      paymentStats[payment.method].amount += Number(order.total || 0);
+    }
+    (order.items || []).forEach(item => {
+      const key = `${item.name}${item.size ? ` · ${item.size}` : ''}`;
+      if (!productStats[key]) productStats[key] = { name: key, qty: 0, amount: 0 };
+      productStats[key].qty += Number(item.qty || 0);
+      productStats[key].amount += Number(item.qty || 0) * Number(item.price || 0);
+    });
+  });
+
+  const cash = paymentStats.cash || { count: 0, amount: 0 };
+  document.getElementById('report-sales').textContent = formatMoney(totalSales);
+  document.getElementById('report-sales-count').textContent = `${todayOrders.length} order${todayOrders.length === 1 ? '' : 's'}`;
+  document.getElementById('report-average').textContent = formatMoney(average);
+  document.getElementById('report-cash-expected').textContent = formatMoney(cash.amount);
+  document.getElementById('report-cash-count').textContent = `${cash.count} cash order${cash.count === 1 ? '' : 's'}`;
+  document.getElementById('report-completed').textContent = completed.length;
+  document.getElementById('report-pending').textContent = `${pending.length} pending`;
+
+  document.getElementById('report-payment-breakdown').innerHTML = PAYMENT_METHODS
+    .map(method => {
+      const stat = paymentStats[method.id];
+      return `
+        <div class="report-row">
+          <div>
+            <div class="name"><span class="pay-word ${method.id}">${method.label}</span></div>
+            <div class="meta">${stat.count} order${stat.count === 1 ? '' : 's'}</div>
+          </div>
+          <div class="amount">${formatMoney(stat.amount)}</div>
+        </div>
+      `;
+    }).join('');
+
+  const topProducts = Object.values(productStats)
+    .sort((a, b) => b.qty - a.qty || b.amount - a.amount)
+    .slice(0, 6);
+  document.getElementById('report-top-products').innerHTML = topProducts.length
+    ? topProducts.map(product => `
+      <div class="report-row">
+        <div>
+          <div class="name">${escapeHTML(product.name)}</div>
+          <div class="meta">${product.qty} sold</div>
+        </div>
+        <div class="amount">${formatMoney(product.amount)}</div>
+      </div>
+    `).join('')
+    : `<p class="report-empty">No products sold today.</p>`;
+
+  const actualCash = parseFloat(document.getElementById('actual-cash-input')?.value) || 0;
+  const difference = actualCash - cash.amount;
+  document.getElementById('closeout-expected').textContent = formatMoney(cash.amount);
+  document.getElementById('closeout-actual').textContent = formatMoney(actualCash);
+  document.getElementById('closeout-difference').textContent = `${difference < 0 ? '-' : ''}${formatMoney(Math.abs(difference))}`;
+
+  document.getElementById('report-status-breakdown').innerHTML = todayOrders.length
+    ? `
+      <div class="report-row">
+        <div><div class="name">Pending</div><div class="meta">Not yet completed</div></div>
+        <div class="amount">${pending.length}</div>
+      </div>
+      <div class="report-row">
+        <div><div class="name">Completed</div><div class="meta">Marked done</div></div>
+        <div class="amount">${completed.length}</div>
+      </div>
+    `
+    : `<p class="report-empty">No orders today.</p>`;
 }
 
 function isTodayOrder(order) {
@@ -1884,6 +2185,7 @@ function completeOrder(id) {
   o.completedAt = new Date().toISOString();
   saveState();
   renderOrders();
+  renderReports();
   updatePendingBadge();
   showToast(`Order #${o.id} completed`, {
     label: 'Undo',
@@ -1898,6 +2200,7 @@ function undoCompleteOrder(id) {
   delete o.completedAt;
   saveState();
   renderOrders();
+  renderReports();
   updatePendingBadge();
   showToast(`Order #${o.id} moved back to pending`);
 }
@@ -1922,16 +2225,22 @@ function showView(id, btn) {
     if (fallbackBtn) fallbackBtn.classList.add('active');
   }
   if (id === 'pos') {
-    document.body.classList.remove('mobile-section-orders');
+    document.body.classList.remove('mobile-section-orders', 'mobile-section-reports');
     document.body.classList.add('mobile-section-menu');
     setMobileNavActive('menu');
   }
   if (id === 'orders') {
-    document.body.classList.remove('mobile-section-menu', 'mobile-section-cart');
+    document.body.classList.remove('mobile-section-menu', 'mobile-section-cart', 'mobile-section-reports');
     document.body.classList.add('mobile-section-orders');
     setMobileNavActive('orders');
   }
+  if (id === 'reports') {
+    document.body.classList.remove('mobile-section-menu', 'mobile-section-cart', 'mobile-section-orders');
+    document.body.classList.add('mobile-section-reports');
+    setMobileNavActive('reports');
+  }
   if (id === 'orders') renderOrders();
+  if (id === 'reports') renderReports();
 }
 
 function setMobileNavActive(section) {
@@ -1945,6 +2254,10 @@ function showMobileSection(section, btn) {
     showView('orders');
     return;
   }
+  if (section === 'reports') {
+    showView('reports');
+    return;
+  }
 
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-pos').classList.add('active');
@@ -1952,7 +2265,7 @@ function showMobileSection(section, btn) {
   const registerBtn = document.querySelector('.topbar-nav .nav-btn');
   if (registerBtn) registerBtn.classList.add('active');
 
-  document.body.classList.remove('mobile-section-menu', 'mobile-section-cart', 'mobile-section-orders');
+  document.body.classList.remove('mobile-section-menu', 'mobile-section-cart', 'mobile-section-orders', 'mobile-section-reports');
   document.body.classList.add(section === 'cart' ? 'mobile-section-cart' : 'mobile-section-menu');
   setMobileNavActive(section);
 }
@@ -1990,6 +2303,7 @@ buildFilters();
 renderCatalog();
 renderCart();
 renderOrders();
+renderReports();
 updatePendingBadge();
 restoreSession();
 
