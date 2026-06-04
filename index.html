@@ -1447,6 +1447,7 @@
 const CURRENCY = '₱';
 const STORAGE_KEY = 'bakerbake-pos-state-v1';
 const SESSION_KEY = 'bakerbake-pos-session-v1';
+const BACKEND_ENABLED = location.protocol === 'http:' || location.protocol === 'https:';
 const CASHIERS = [
   { username: 'cashier', password: '1234', name: 'Cashier' },
   { username: 'admin', password: 'admin123', name: 'Admin' }
@@ -1493,6 +1494,20 @@ let currentUser = null;
 let pendingSizeProductId = null;
 let pendingUndoTimer = null;
 let pendingUndoOrderId = null;
+let backendSaveTimer = null;
+let isApplyingBackendState = false;
+
+function getSession() {
+  try {
+    return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+  } catch {
+    return null;
+  }
+}
+
+function getBackendToken() {
+  return getSession()?.token || '';
+}
 
 function normalizeUsername(value) {
   return value.trim().toLowerCase();
@@ -1500,6 +1515,7 @@ function normalizeUsername(value) {
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ cart, orders, orderCounter }));
+  scheduleBackendSave();
 }
 
 function loadState() {
@@ -1513,6 +1529,64 @@ function loadState() {
     cart = {};
     orders = [];
     orderCounter = 1001;
+  }
+}
+
+async function apiRequest(path, options = {}) {
+  if (!BACKEND_ENABLED) throw new Error('Backend unavailable from file mode');
+  const token = getBackendToken();
+  const response = await fetch(path, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers || {})
+    }
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || `Request failed: ${response.status}`);
+  return data;
+}
+
+function getSerializableState() {
+  return { cart, orders, orderCounter, closeouts: [] };
+}
+
+function scheduleBackendSave() {
+  if (!BACKEND_ENABLED || isApplyingBackendState) return;
+  if (backendSaveTimer) clearTimeout(backendSaveTimer);
+  backendSaveTimer = setTimeout(pushStateToBackend, 250);
+}
+
+async function pushStateToBackend() {
+  if (!BACKEND_ENABLED) return;
+  try {
+    await apiRequest('/api/state', {
+      method: 'PUT',
+      body: JSON.stringify(getSerializableState())
+    });
+  } catch (error) {
+    console.warn('Backend save failed:', error.message);
+  }
+}
+
+async function syncFromBackend() {
+  if (!BACKEND_ENABLED) return;
+  try {
+    const state = await apiRequest('/api/state');
+    isApplyingBackendState = true;
+    if (state.cart && typeof state.cart === 'object') cart = state.cart;
+    if (Array.isArray(state.orders)) orders = state.orders;
+    if (Number.isInteger(state.orderCounter)) orderCounter = state.orderCounter;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ cart, orders, orderCounter }));
+    renderCart();
+    renderOrders();
+    renderReports();
+    updatePendingBadge();
+  } catch (error) {
+    console.warn('Backend sync failed:', error.message);
+  } finally {
+    isApplyingBackendState = false;
   }
 }
 
@@ -1565,10 +1639,28 @@ function showLogin() {
   setTimeout(() => document.getElementById('login-username').focus(), 0);
 }
 
-function login(event) {
+async function login(event) {
   event.preventDefault();
   const username = normalizeUsername(document.getElementById('login-username').value);
   const password = document.getElementById('login-password').value;
+
+  if (BACKEND_ENABLED) {
+    try {
+      const result = await apiRequest('/api/login', {
+        method: 'POST',
+        body: JSON.stringify({ username, password })
+      });
+      const sessionUser = result.user;
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ user: sessionUser, token: result.token }));
+      document.getElementById('login-error').textContent = '';
+      showAppForUser(sessionUser, true);
+      await syncFromBackend();
+    } catch (error) {
+      document.getElementById('login-error').textContent = error.message || 'Invalid username or password.';
+    }
+    return;
+  }
+
   const user = CASHIERS.find(c => c.username === username && c.password === password);
 
   if (!user) {
@@ -1577,7 +1669,7 @@ function login(event) {
   }
 
   const sessionUser = { username: user.username, name: user.name };
-  localStorage.setItem(SESSION_KEY, JSON.stringify(sessionUser));
+  localStorage.setItem(SESSION_KEY, JSON.stringify({ user: sessionUser }));
   document.getElementById('login-error').textContent = '';
   showAppForUser(sessionUser, true);
 }
@@ -1596,11 +1688,21 @@ function confirmLogout() {
   showLogin();
 }
 
-function restoreSession() {
+async function restoreSession() {
   try {
-    const saved = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
-    const user = saved && CASHIERS.find(c => c.username === saved.username);
-    if (user) {
+    const saved = getSession();
+    if (BACKEND_ENABLED && saved?.token) {
+      const result = await apiRequest('/api/session');
+      const user = result.user || saved.user;
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ user, token: saved.token }));
+      showAppForUser(user);
+      await syncFromBackend();
+      return;
+    }
+
+    const savedUser = saved?.user || saved;
+    const user = savedUser && CASHIERS.find(c => c.username === savedUser.username);
+    if (!BACKEND_ENABLED && user) {
       showAppForUser({ username: user.username, name: user.name });
       return;
     }

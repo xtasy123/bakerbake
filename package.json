@@ -1,0 +1,13 @@
+{
+  "name": "bakerbake-pos",
+  "version": "1.0.0",
+  "private": true,
+  "description": "BakerBake POS PWA with a lightweight local backend",
+  "scripts": {
+    "start": "node server.js",
+    "hash-password": "node scripts/hash-password.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
