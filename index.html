@@ -444,9 +444,9 @@
   #view-orders h1 { font-size: 20px; font-weight: 600; }
   .orders-toolbar {
     display: grid;
-    grid-template-columns: minmax(220px, 320px) 1fr;
-    gap: 14px;
-    align-items: stretch;
+    grid-template-columns: minmax(220px, 1fr) auto;
+    gap: 10px;
+    align-items: center;
   }
   .orders-search {
     width: 100%;
@@ -461,46 +461,36 @@
     outline: none;
   }
   .orders-search:focus { border-color: var(--accent); }
-  .orders-summary {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(110px, 1fr));
-    gap: 8px;
-  }
-  .orders-stat {
+  .orders-segmented {
+    display: inline-flex;
+    justify-self: end;
+    gap: 2px;
+    padding: 3px;
     border: 1px solid var(--border);
     border-radius: 10px;
-    background: var(--surface);
-    padding: 9px 11px;
-    min-height: 44px;
+    background: var(--surface2);
   }
-  .orders-stat .label {
-    display: block;
-    color: var(--text3);
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    margin-bottom: 2px;
-  }
-  .orders-stat .label .pay-word {
+  .orders-segment {
+    min-height: 34px;
+    padding: 8px 12px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text2);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
     font-weight: 800;
+    cursor: pointer;
+  }
+  .orders-segment.active {
+    background: var(--surface);
+    color: var(--accent);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   }
   .pay-word.cash { color: #118044; }
   .pay-word.bpi { color: #b41f2a; }
   .pay-word.unionbank { color: #d96b00; }
   .pay-word.gcash { color: #1167d8; }
-  .orders-stat .value {
-    color: var(--text);
-    font-size: 15px;
-    font-weight: 800;
-  }
-  .orders-stat .subvalue {
-    display: block;
-    color: var(--text2);
-    font-size: 12px;
-    font-weight: 700;
-    margin-top: 2px;
-  }
   .orders-panel { display: flex; flex-direction: column; gap: 12px; }
   .orders-panel-header {
     display: flex;
@@ -1053,13 +1043,14 @@
     }
     .orders-toolbar {
       grid-template-columns: 1fr;
-      gap: 10px;
+      gap: 8px;
     }
-    .orders-summary {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+    .orders-segmented {
+      width: 100%;
+      justify-self: stretch;
     }
-    .orders-stat {
-      min-height: 54px;
+    .orders-segment {
+      flex: 1;
     }
     .toast {
       bottom: calc(82px + env(safe-area-inset-bottom));
@@ -1219,46 +1210,13 @@
     <h1>Orders</h1>
     <div class="orders-toolbar">
       <input class="orders-search" id="orders-search" type="search" placeholder="Search order, customer, item, payment" oninput="renderOrders()" autocomplete="off">
-      <div class="orders-summary" aria-label="Order summary">
-        <div class="orders-stat">
-          <span class="label">Pending</span>
-          <span class="value" id="orders-stat-pending">0</span>
-        </div>
-        <div class="orders-stat">
-          <span class="label">Completed</span>
-          <span class="value" id="orders-stat-completed">0</span>
-        </div>
-        <div class="orders-stat">
-          <span class="label">Today Sales</span>
-          <span class="value" id="orders-stat-sales">₱0</span>
-        </div>
-        <div class="orders-stat">
-          <span class="label"><span class="pay-word cash">Cash</span> Orders</span>
-          <span class="value" id="orders-stat-cash-count">0</span>
-          <span class="subvalue" id="orders-stat-cash">₱0</span>
-        </div>
-        <div class="orders-stat">
-          <span class="label"><span class="pay-word bpi">BPI</span> Orders</span>
-          <span class="value" id="orders-stat-bpi-count">0</span>
-          <span class="subvalue" id="orders-stat-bpi">₱0</span>
-        </div>
-        <div class="orders-stat">
-          <span class="label"><span class="pay-word unionbank">UnionBank</span> Orders</span>
-          <span class="value" id="orders-stat-unionbank-count">0</span>
-          <span class="subvalue" id="orders-stat-unionbank">₱0</span>
-        </div>
-        <div class="orders-stat">
-          <span class="label"><span class="pay-word gcash">GCash</span> Orders</span>
-          <span class="value" id="orders-stat-gcash-count">0</span>
-          <span class="subvalue" id="orders-stat-gcash">₱0</span>
-        </div>
-        <div class="orders-stat">
-          <span class="label">Total Orders</span>
-          <span class="value" id="orders-stat-total">0</span>
-        </div>
+      <div class="orders-segmented" aria-label="Order filter">
+        <button class="orders-segment active" type="button" data-order-filter="all" onclick="setOrderFilter('all')">All</button>
+        <button class="orders-segment" type="button" data-order-filter="pending" onclick="setOrderFilter('pending')">Pending</button>
+        <button class="orders-segment" type="button" data-order-filter="completed" onclick="setOrderFilter('completed')">Completed</button>
       </div>
     </div>
-    <section class="orders-panel">
+    <section class="orders-panel" id="pending-orders-panel">
       <div class="orders-panel-header">
         <h2>Pending</h2>
         <span class="orders-count" id="pending-orders-count">0 orders</span>
@@ -1267,7 +1225,7 @@
         <p class="orders-empty">No pending orders.</p>
       </div>
     </section>
-    <section class="orders-panel">
+    <section class="orders-panel" id="completed-orders-panel">
       <div class="orders-panel-header">
         <h2>Completed</h2>
         <span class="orders-count" id="completed-orders-count">0 orders</span>
@@ -1489,6 +1447,7 @@ let cart = {};
 let orders = [];
 let orderCounter = 1001;
 let activeCategory = 'ALL';
+let activeOrderFilter = 'all';
 let payMethod = 'cash';
 let currentUser = null;
 let pendingSizeProductId = null;
@@ -2053,12 +2012,21 @@ function renderOrders() {
   const query = (document.getElementById('orders-search')?.value || '').trim().toLowerCase();
   const allPending = orders.filter(o => o.status !== 'done');
   const allCompleted = orders.filter(o => o.status === 'done');
-  const pending = query ? allPending.filter(o => orderMatchesQuery(o, query)) : allPending;
-  const completed = query ? allCompleted.filter(o => orderMatchesQuery(o, query)) : allCompleted;
+  const matchesQuery = order => !query || orderMatchesQuery(order, query);
+  const pending = allPending.filter(matchesQuery);
+  const completed = allCompleted.filter(matchesQuery);
+  const showPending = activeOrderFilter !== 'completed';
+  const showCompleted = activeOrderFilter !== 'pending';
+  const pendingPanel = document.getElementById('pending-orders-panel');
+  const completedPanel = document.getElementById('completed-orders-panel');
   const pendingGrid = document.getElementById('pending-orders-grid');
   const completedGrid = document.getElementById('completed-orders-grid');
 
-  renderOrderSummary(allPending, allCompleted);
+  if (pendingPanel) pendingPanel.hidden = !showPending;
+  if (completedPanel) completedPanel.hidden = !showCompleted;
+  document.querySelectorAll('.orders-segment').forEach(button => {
+    button.classList.toggle('active', button.dataset.orderFilter === activeOrderFilter);
+  });
 
   document.getElementById('pending-orders-count').textContent = formatPanelCount(pending.length, allPending.length, query);
   document.getElementById('completed-orders-count').textContent = formatPanelCount(completed.length, allCompleted.length, query);
@@ -2072,37 +2040,14 @@ function renderOrders() {
     : `<p class="orders-empty">${query ? 'No matching completed orders.' : 'No completed orders.'}</p>`;
 }
 
+function setOrderFilter(filter) {
+  activeOrderFilter = filter;
+  renderOrders();
+}
+
 function formatPanelCount(count, total, isFiltered) {
   const label = `${count} order${count === 1 ? '' : 's'}`;
   return isFiltered ? `${label} of ${total}` : label;
-}
-
-function renderOrderSummary(pending, completed) {
-  const todayOrders = orders.filter(isTodayOrder);
-  const totals = PAYMENT_METHODS.reduce((acc, method) => {
-    acc[method.id] = { count: 0, amount: 0 };
-    return acc;
-  }, {});
-  let todaySales = 0;
-
-  todayOrders.forEach(order => {
-    const payment = getOrderPayment(order);
-    todaySales += Number(order.total || 0);
-    if (totals[payment.method] !== undefined) {
-      totals[payment.method].count += 1;
-      totals[payment.method].amount += Number(order.total || 0);
-    }
-  });
-
-  document.getElementById('orders-stat-pending').textContent = pending.length;
-  document.getElementById('orders-stat-completed').textContent = completed.length;
-  document.getElementById('orders-stat-total').textContent = orders.length;
-  document.getElementById('orders-stat-sales').textContent = formatMoney(todaySales);
-  PAYMENT_METHODS.forEach(method => {
-    const stat = totals[method.id] || { count: 0, amount: 0 };
-    document.getElementById(`orders-stat-${method.id}-count`).textContent = stat.count;
-    document.getElementById(`orders-stat-${method.id}`).textContent = formatMoney(stat.amount);
-  });
 }
 
 function getTodayOrders() {
