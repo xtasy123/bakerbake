@@ -486,6 +486,15 @@
   .order-items-list { margin-bottom: 12px; }
   .order-item-row { display: flex; justify-content: space-between; font-size: 13px; padding: 2px 0; }
   .order-item-row .qty { color: var(--text2); }
+  .order-payment {
+    border-top: 1px solid var(--border);
+    padding-top: 10px;
+    margin: 10px 0 12px;
+    font-size: 12px;
+    color: var(--text2);
+  }
+  .order-payment div { display: flex; justify-content: space-between; gap: 12px; }
+  .order-payment strong { color: var(--text); font-weight: 700; }
 
   .order-card-footer { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border); padding-top: 12px; }
   .order-total { font-size: 15px; font-weight: 700; }
@@ -962,17 +971,22 @@
 
     <div class="pay-methods">
       <button class="pay-method selected" onclick="selectMethod('cash', this)">
-        <span class="method-icon">💵</span>Cash
+        <span class="method-icon">₱</span>Cash
       </button>
-      <button class="pay-method" onclick="selectMethod('card', this)">
-        <span class="method-icon">💳</span>Card
+      <button class="pay-method" onclick="selectMethod('bpi', this)">
+        <span class="method-icon">BPI</span>BPI
       </button>
-      <button class="pay-method" onclick="selectMethod('qr', this)">
-        <span class="method-icon">📱</span>QR Pay
+      <button class="pay-method" onclick="selectMethod('unionbank', this)">
+        <span class="method-icon">UB</span>UnionBank
       </button>
       <button class="pay-method" onclick="selectMethod('gcash', this)">
-        <span class="method-icon">🔵</span>GCash
+        <span class="method-icon">G</span>GCash
       </button>
+    </div>
+
+    <div class="customer-section" id="reference-section" style="display:none">
+      <div class="cash-label">Reference Number</div>
+      <input class="customer-input" type="text" id="payment-reference" placeholder="Optional">
     </div>
 
     <div class="cash-section" id="cash-section">
@@ -1025,6 +1039,12 @@ const SESSION_KEY = 'bakerbake-pos-session-v1';
 const CASHIERS = [
   { username: 'cashier', password: '1234', name: 'Cashier' },
   { username: 'admin', password: 'admin123', name: 'Admin' }
+];
+const PAYMENT_METHODS = [
+  { id: 'cash', label: 'Cash', type: 'cash' },
+  { id: 'bpi', label: 'BPI', type: 'bank' },
+  { id: 'unionbank', label: 'UnionBank', type: 'bank' },
+  { id: 'gcash', label: 'GCash', type: 'wallet' }
 ];
 
 // imageUrl: set to a file path or URL when you have photos, e.g. 'images/espresso.jpg'
@@ -1394,6 +1414,19 @@ function formatOrderDateTime(order) {
   return order.date ? `${order.date} ${order.time || ''}` : (order.time || '');
 }
 
+function getOrderPayment(order) {
+  if (order.payment) return order.payment;
+  const method = PAYMENT_METHODS.find(x => x.id === order.method);
+  return {
+    method: order.method || 'cash',
+    label: method ? method.label : (order.method || 'Cash'),
+    type: method ? method.type : 'cash',
+    reference: '',
+    cashTendered: null,
+    change: null
+  };
+}
+
 // ── Payment ──
 function openPayment() {
   const total = getTotal();
@@ -1401,6 +1434,7 @@ function openPayment() {
   document.getElementById('pay-amount').textContent = `${CURRENCY}${total.toLocaleString()}`;
   document.getElementById('pay-item-count').textContent = `${itemCount} item${itemCount > 1 ? 's':''}`;
   document.getElementById('customer-name').value = '';
+  document.getElementById('payment-reference').value = '';
   document.getElementById('cash-input').value = '';
   document.getElementById('change-val').textContent = `${CURRENCY}0`;
 
@@ -1413,6 +1447,7 @@ function openPayment() {
 
   payMethod = 'cash';
   document.getElementById('cash-section').style.display = '';
+  document.getElementById('reference-section').style.display = 'none';
   document.querySelectorAll('.pay-method').forEach((b,i) => b.classList.toggle('selected', i===0));
   document.getElementById('payment-modal').classList.add('open');
 }
@@ -1423,10 +1458,13 @@ function closePayment() {
 
 function selectMethod(m, btn) {
   payMethod = m;
+  const method = PAYMENT_METHODS.find(x => x.id === payMethod) || PAYMENT_METHODS[0];
   document.querySelectorAll('.pay-method').forEach(b => b.classList.remove('selected'));
   btn.classList.add('selected');
-  document.getElementById('cash-section').style.display = m === 'cash' ? '' : 'none';
+  document.getElementById('cash-section').style.display = method.type === 'cash' ? '' : 'none';
+  document.getElementById('reference-section').style.display = method.type === 'cash' ? 'none' : '';
   document.getElementById('confirm-btn').disabled = false;
+  updateChange();
 }
 
 function setTendered(v) {
@@ -1439,7 +1477,8 @@ function updateChange() {
   const tendered = parseFloat(document.getElementById('cash-input').value) || 0;
   const change = Math.max(0, tendered - total);
   document.getElementById('change-val').textContent = `${CURRENCY}${change.toLocaleString()}`;
-  document.getElementById('confirm-btn').disabled = payMethod === 'cash' && tendered < total;
+  const method = PAYMENT_METHODS.find(x => x.id === payMethod) || PAYMENT_METHODS[0];
+  document.getElementById('confirm-btn').disabled = method.type === 'cash' && tendered < total;
 }
 
 function confirmPayment() {
@@ -1453,6 +1492,17 @@ function confirmPayment() {
   }));
   const customerName = document.getElementById('customer-name').value.trim() || 'Walk-in';
   const now = new Date();
+  const method = PAYMENT_METHODS.find(x => x.id === payMethod) || PAYMENT_METHODS[0];
+  const tendered = parseFloat(document.getElementById('cash-input').value) || 0;
+  const reference = document.getElementById('payment-reference').value.trim();
+  const payment = {
+    method: method.id,
+    label: method.label,
+    type: method.type,
+    reference: method.type === 'cash' ? '' : reference,
+    cashTendered: method.type === 'cash' ? tendered : null,
+    change: method.type === 'cash' ? Math.max(0, tendered - total) : null
+  };
 
   const order = {
     id: orderCounter++,
@@ -1464,7 +1514,8 @@ function confirmPayment() {
     createdAt: now.toISOString(),
     date: now.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }),
     time: now.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' }),
-    method: payMethod
+    payment,
+    method: method.id
   };
   orders.unshift(order);
   saveState();
@@ -1497,6 +1548,7 @@ function renderOrders() {
 }
 
 function orderCardHTML(o) {
+  const payment = getOrderPayment(o);
   return `
     <div class="order-card" id="order-${o.id}">
       <div class="order-card-header">
@@ -1517,6 +1569,10 @@ function orderCardHTML(o) {
             <span>${i.name}${i.size ? ` · ${i.size}` : ''}</span>
             <span class="qty">×${i.qty}</span>
           </div>`).join('')}
+      </div>
+      <div class="order-payment">
+        <div><span>Payment</span><strong>${payment.label}</strong></div>
+        ${payment.reference ? `<div><span>Ref</span><strong>${escapeHTML(payment.reference)}</strong></div>` : ''}
       </div>
       <div class="order-card-footer">
         <div class="order-total">${CURRENCY}${o.total.toLocaleString()}</div>
