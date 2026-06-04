@@ -487,6 +487,13 @@
     font-size: 15px;
     font-weight: 800;
   }
+  .orders-stat .subvalue {
+    display: block;
+    color: var(--text2);
+    font-size: 12px;
+    font-weight: 700;
+    margin-top: 2px;
+  }
   .orders-panel { display: flex; flex-direction: column; gap: 12px; }
   .orders-panel-header {
     display: flex;
@@ -535,7 +542,7 @@
   }
   .status-pending { background: var(--amber-light); color: var(--amber); }
   .status-ready { background: var(--accent-light); color: var(--accent); }
-  .status-done { background: var(--surface2); color: var(--text3); }
+  .status-done { background: #e8f7ed; color: #157a3d; }
   .payment-cash { background: #f5f5f5; color: var(--text); }
   .payment-bpi { background: #fff0f0; color: #b41f2a; }
   .payment-unionbank { background: #fff4e5; color: #d96b00; }
@@ -730,7 +737,7 @@
     padding: 10px 20px; border-radius: 20px;
     font-size: 13px; font-weight: 500;
     opacity: 0; transition: all 0.3s; pointer-events: none; white-space: nowrap;
-    z-index: 200;
+    z-index: 500;
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   .toast-action {
@@ -927,6 +934,13 @@
     .orders-stat {
       min-height: 54px;
     }
+    .toast {
+      bottom: calc(82px + env(safe-area-inset-bottom));
+      max-width: calc(100vw - 28px);
+      white-space: normal;
+      text-align: center;
+      z-index: 500;
+    }
     .orders-grid { grid-template-columns: 1fr; }
     .order-card { padding: 14px; }
     .order-badges { max-width: 128px; }
@@ -1070,20 +1084,24 @@
           <span class="value" id="orders-stat-sales">₱0</span>
         </div>
         <div class="orders-stat">
-          <span class="label">Cash</span>
-          <span class="value" id="orders-stat-cash">₱0</span>
+          <span class="label">Cash Orders</span>
+          <span class="value" id="orders-stat-cash-count">0</span>
+          <span class="subvalue" id="orders-stat-cash">₱0</span>
         </div>
         <div class="orders-stat">
-          <span class="label">BPI</span>
-          <span class="value" id="orders-stat-bpi">₱0</span>
+          <span class="label">BPI Orders</span>
+          <span class="value" id="orders-stat-bpi-count">0</span>
+          <span class="subvalue" id="orders-stat-bpi">₱0</span>
         </div>
         <div class="orders-stat">
-          <span class="label">UnionBank</span>
-          <span class="value" id="orders-stat-unionbank">₱0</span>
+          <span class="label">UnionBank Orders</span>
+          <span class="value" id="orders-stat-unionbank-count">0</span>
+          <span class="subvalue" id="orders-stat-unionbank">₱0</span>
         </div>
         <div class="orders-stat">
-          <span class="label">GCash</span>
-          <span class="value" id="orders-stat-gcash">₱0</span>
+          <span class="label">GCash Orders</span>
+          <span class="value" id="orders-stat-gcash-count">0</span>
+          <span class="subvalue" id="orders-stat-gcash">₱0</span>
         </div>
         <div class="orders-stat">
           <span class="label">Total Orders</span>
@@ -1737,7 +1755,7 @@ function formatPanelCount(count, total, isFiltered) {
 function renderOrderSummary(pending, completed) {
   const todayOrders = orders.filter(isTodayOrder);
   const totals = PAYMENT_METHODS.reduce((acc, method) => {
-    acc[method.id] = 0;
+    acc[method.id] = { count: 0, amount: 0 };
     return acc;
   }, {});
   let todaySales = 0;
@@ -1746,7 +1764,8 @@ function renderOrderSummary(pending, completed) {
     const payment = getOrderPayment(order);
     todaySales += Number(order.total || 0);
     if (totals[payment.method] !== undefined) {
-      totals[payment.method] += Number(order.total || 0);
+      totals[payment.method].count += 1;
+      totals[payment.method].amount += Number(order.total || 0);
     }
   });
 
@@ -1754,10 +1773,11 @@ function renderOrderSummary(pending, completed) {
   document.getElementById('orders-stat-completed').textContent = completed.length;
   document.getElementById('orders-stat-total').textContent = orders.length;
   document.getElementById('orders-stat-sales').textContent = formatMoney(todaySales);
-  document.getElementById('orders-stat-cash').textContent = formatMoney(totals.cash);
-  document.getElementById('orders-stat-bpi').textContent = formatMoney(totals.bpi);
-  document.getElementById('orders-stat-unionbank').textContent = formatMoney(totals.unionbank);
-  document.getElementById('orders-stat-gcash').textContent = formatMoney(totals.gcash);
+  PAYMENT_METHODS.forEach(method => {
+    const stat = totals[method.id] || { count: 0, amount: 0 };
+    document.getElementById(`orders-stat-${method.id}-count`).textContent = stat.count;
+    document.getElementById(`orders-stat-${method.id}`).textContent = formatMoney(stat.amount);
+  });
 }
 
 function isTodayOrder(order) {
