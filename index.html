@@ -739,7 +739,11 @@
     opacity: 0; transition: all 0.3s; pointer-events: none; white-space: nowrap;
     z-index: 500;
   }
-  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+    pointer-events: auto;
+  }
   .toast-action {
     border: 0;
     background: transparent;
