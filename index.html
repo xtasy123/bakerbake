@@ -569,7 +569,53 @@
   }
   .pay-method:hover { border-color: var(--accent); color: var(--accent); }
   .pay-method.selected { border-color: var(--accent); background: var(--accent-light); color: var(--accent); }
-  .pay-method .method-icon { font-size: 22px; display: block; margin-bottom: 4px; }
+  .pay-method .method-icon {
+    min-height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 6px;
+    font-size: 22px;
+    font-weight: 800;
+  }
+  .brand-logo {
+    width: 74px;
+    height: 30px;
+    border-radius: 7px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: 0;
+  }
+  .brand-logo.bpi {
+    background: #b5121b;
+    color: #f6c34a;
+    font-family: Arial, sans-serif;
+  }
+  .brand-logo.unionbank {
+    background: #f58220;
+    color: #ffffff;
+    font-family: Arial, sans-serif;
+    gap: 4px;
+  }
+  .brand-logo.unionbank::before {
+    content: "";
+    width: 13px;
+    height: 13px;
+    border: 3px solid currentColor;
+    border-radius: 3px;
+    transform: rotate(45deg);
+  }
+  .brand-logo.gcash {
+    background: #007dff;
+    color: #ffffff;
+    border-radius: 999px;
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+  }
 
   .cash-section { margin-bottom: 20px; }
   .cash-label { font-size: 12px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 8px; }
@@ -974,13 +1020,13 @@
         <span class="method-icon">₱</span>Cash
       </button>
       <button class="pay-method" onclick="selectMethod('bpi', this)">
-        <span class="method-icon">BPI</span>BPI
+        <span class="method-icon"><span class="brand-logo bpi">BPI</span></span>BPI
       </button>
       <button class="pay-method" onclick="selectMethod('unionbank', this)">
-        <span class="method-icon">UB</span>UnionBank
+        <span class="method-icon"><span class="brand-logo unionbank">UB</span></span>UnionBank
       </button>
       <button class="pay-method" onclick="selectMethod('gcash', this)">
-        <span class="method-icon">G</span>GCash
+        <span class="method-icon"><span class="brand-logo gcash">GCash</span></span>GCash
       </button>
     </div>
 
