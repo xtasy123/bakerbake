@@ -2022,8 +2022,8 @@ function renderOrders() {
   const pendingGrid = document.getElementById('pending-orders-grid');
   const completedGrid = document.getElementById('completed-orders-grid');
 
-  if (pendingPanel) pendingPanel.hidden = !showPending;
-  if (completedPanel) completedPanel.hidden = !showCompleted;
+  if (pendingPanel) pendingPanel.style.display = showPending ? 'flex' : 'none';
+  if (completedPanel) completedPanel.style.display = showCompleted ? 'flex' : 'none';
   document.querySelectorAll('.orders-segment').forEach(button => {
     button.classList.toggle('active', button.dataset.orderFilter === activeOrderFilter);
   });
