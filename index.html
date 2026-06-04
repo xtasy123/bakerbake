@@ -597,10 +597,20 @@
   }
   .logo-bpi { --logo-scale: 1.55; }
   .logo-ub { --logo-scale: 2.25; }
-  .logo-gcash { --logo-scale: 1.2; }
+  .logo-gcash {
+    width: 82px;
+    height: 34px;
+    --logo-scale: 1;
+  }
   .pay-method:has(.logo-ub) .method-icon {
     height: 36px;
     min-height: 36px;
+  }
+  .pay-method:has(.logo-gcash) .method-icon {
+    height: 40px;
+    min-height: 40px;
+    overflow: visible;
+    margin-bottom: 1px;
   }
   .cash-mark {
     width: 42px;
