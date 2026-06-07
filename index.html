@@ -1227,9 +1227,9 @@
     <div class="orders-toolbar">
       <input class="orders-search" id="orders-search" type="search" placeholder="Search order, customer, item, payment" oninput="renderOrders()" autocomplete="off">
       <div class="orders-segmented" aria-label="Order filter">
-        <button class="orders-segment active" type="button" data-order-filter="all" onclick="setOrderFilter('all')">All</button>
-        <button class="orders-segment" type="button" data-order-filter="pending" onclick="setOrderFilter('pending')">Pending</button>
+        <button class="orders-segment active" type="button" data-order-filter="pending" onclick="setOrderFilter('pending')">Pending</button>
         <button class="orders-segment" type="button" data-order-filter="completed" onclick="setOrderFilter('completed')">Completed</button>
+        <button class="orders-segment" type="button" data-order-filter="all" onclick="setOrderFilter('all')">All</button>
       </div>
     </div>
     <section class="orders-panel" id="pending-orders-panel">
@@ -1463,7 +1463,7 @@ let cart = {};
 let orders = [];
 let orderCounter = 1001;
 let activeCategory = 'ALL';
-let activeOrderFilter = 'all';
+let activeOrderFilter = 'pending';
 let payMethod = 'cash';
 let currentUser = null;
 let pendingSizeProductId = null;
@@ -2303,6 +2303,7 @@ function showView(id, btn) {
     setMobileNavActive('menu');
   }
   if (id === 'orders') {
+    activeOrderFilter = 'pending';
     document.body.classList.remove('mobile-section-menu', 'mobile-section-cart', 'mobile-section-reports');
     document.body.classList.add('mobile-section-orders');
     setMobileNavActive('orders');
