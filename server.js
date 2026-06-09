@@ -505,14 +505,15 @@ async function handleApi(req, res, url) {
     const hasDeletedOrders = [...currentOrders.keys()].some(id => !nextOrderIds.has(id));
     const hasProtectedMutation = nextOrders.some(order => {
       const current = currentOrders.get(String(order.id));
-      if (!current) return false;
+      if (!current) return order.status !== 'pending' || Boolean(order.voidRequest);
       const unauthorizedVoid = order.status === 'voided'
         && current.status !== 'voided'
         && (current.status === 'done' || current.previouslyCompleted === true);
       const clearedCompletionAudit = (current.status === 'done' && order.status === 'pending' && order.previouslyCompleted !== true)
         || (current.previouslyCompleted === true && order.previouslyCompleted !== true);
       const restoredVoidedOrder = current.status === 'voided' && order.status !== 'voided';
-      return unauthorizedVoid || clearedCompletionAudit || restoredVoidedOrder;
+      const changedVoidRequest = JSON.stringify(current.voidRequest || null) !== JSON.stringify(order.voidRequest || null);
+      return unauthorizedVoid || clearedCompletionAudit || restoredVoidedOrder || changedVoidRequest;
     });
     if (hasDeletedOrders || hasProtectedMutation) {
       sendJson(res, 403, { error: 'Protected order history cannot be changed without authorization.' });
@@ -535,37 +536,59 @@ async function handleApi(req, res, url) {
     }
     const body = await readJson(req);
     const reason = String(body.reason || '').trim();
-    if (!reason) {
-      sendJson(res, 400, { error: 'A void reason is required.' });
+    if (!reason) return sendJson(res, 400, { error: 'A void reason is required.' });
+    const db = await readDb();
+    const order = (db.orders || []).find(item => String(item.id) === String(body.orderId));
+    if (!order) return sendJson(res, 404, { error: 'Order not found.' });
+    if (order.status === 'voided') return sendJson(res, 409, { error: 'Order is already voided.' });
+    if (order.voidRequest?.status === 'pending') {
+      return sendJson(res, 409, { error: 'A void request is already pending.' });
+    }
+    if (order.status !== 'done' && order.previouslyCompleted !== true) {
+      return sendJson(res, 400, { error: 'Only completed orders require a void request.' });
+    }
+    order.voidRequest = {
+      status: 'pending',
+      reason,
+      requestedAt: new Date().toISOString(),
+      requestedBy: authenticatedUser.name || authenticatedUser.sub
+    };
+    await writeDb(db);
+    sendJson(res, 201, { order });
+    return;
+  }
+
+  if (req.method === 'PATCH' && url.pathname === '/api/void-order') {
+    if (authenticatedUser.role !== 'admin') {
+      sendJson(res, 403, { error: 'Forbidden' });
       return;
     }
-    const adminUsername = String(body.adminUsername || '').trim().toLowerCase();
-    const adminPassword = String(body.adminPassword || '');
-    const admin = getUsers().find(user => String(user.username || '').toLowerCase() === adminUsername);
-    if (!admin || admin.role !== 'admin' || !verifyPassword(adminPassword, admin.passwordHash)) {
-      sendJson(res, 401, { error: 'Invalid admin username or password.' });
-      return;
+    const body = await readJson(req);
+    const decision = String(body.decision || '').toLowerCase();
+    if (!['approve', 'reject'].includes(decision)) {
+      return sendJson(res, 400, { error: 'Decision must be approve or reject.' });
     }
     const db = await readDb();
     const order = (db.orders || []).find(item => String(item.id) === String(body.orderId));
-    if (!order) {
-      sendJson(res, 404, { error: 'Order not found.' });
-      return;
+    if (!order) return sendJson(res, 404, { error: 'Order not found.' });
+    if (order.voidRequest?.status !== 'pending') {
+      return sendJson(res, 409, { error: 'This void request is no longer pending.' });
     }
-    if (order.status === 'voided') {
-      sendJson(res, 409, { error: 'Order is already voided.' });
-      return;
+    const reviewedAt = new Date().toISOString();
+    if (decision === 'approve') {
+      order.previousStatus = order.status;
+      order.status = 'voided';
+      order.voidReason = order.voidRequest.reason;
+      order.voidedAt = reviewedAt;
+      order.voidedBy = order.voidRequest.requestedBy;
+      order.authorizedBy = authenticatedUser.name || authenticatedUser.sub;
     }
-    if (order.status !== 'done' && order.previouslyCompleted !== true) {
-      sendJson(res, 400, { error: 'This order does not require completed-order authorization.' });
-      return;
-    }
-    order.previousStatus = order.status;
-    order.status = 'voided';
-    order.voidReason = reason;
-    order.voidedAt = new Date().toISOString();
-    order.voidedBy = authenticatedUser.name || authenticatedUser.sub;
-    order.authorizedBy = admin.name || admin.username;
+    order.voidRequest = {
+      ...order.voidRequest,
+      status: decision === 'approve' ? 'approved' : 'rejected',
+      reviewedAt,
+      reviewedBy: authenticatedUser.name || authenticatedUser.sub
+    };
     await writeDb(db);
     sendJson(res, 200, { order });
     return;
@@ -580,9 +603,13 @@ async function handleApi(req, res, url) {
   if (req.method === 'POST' && url.pathname === '/api/orders') {
     requireRole(req, 'cashier');
     const order = await readJson(req);
+    if (order.status && order.status !== 'pending') {
+      sendJson(res, 400, { error: 'New orders must start as pending.' });
+      return;
+    }
     const db = await readDb();
     const id = Number.isInteger(order.id) ? order.id : db.orderCounter;
-    const savedOrder = { ...order, id };
+    const savedOrder = { ...order, id, status: 'pending' };
     db.orders = [savedOrder, ...db.orders.filter(existing => existing.id !== id)];
     db.orderCounter = Math.max(db.orderCounter, id + 1);
     await writeDb(db);
@@ -599,6 +626,16 @@ async function handleApi(req, res, url) {
     const index = db.orders.findIndex(order => order.id === id);
     if (index === -1) {
       sendJson(res, 404, { error: 'Order not found' });
+      return;
+    }
+    const current = db.orders[index];
+    const protectedFields = ['voidRequest', 'voidReason', 'voidedAt', 'voidedBy', 'authorizedBy', 'previousStatus'];
+    if (protectedFields.some(field => Object.hasOwn(patch, field))
+      || patch.status === 'voided'
+      || current.status === 'voided'
+      || (current.voidRequest?.status === 'pending' && patch.status && patch.status !== current.status)
+      || (current.status === 'done' && patch.status === 'pending' && patch.previouslyCompleted !== true)) {
+      sendJson(res, 403, { error: 'Protected order history cannot be changed through this endpoint.' });
       return;
     }
     db.orders[index] = { ...db.orders[index], ...patch, id };

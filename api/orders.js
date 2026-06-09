@@ -9,8 +9,11 @@ module.exports = async function handler(req, res) {
     if (req.method === 'POST') {
       requireRole(req, 'cashier');
       const order = await readJson(req);
+      if (order.status && order.status !== 'pending') {
+        return sendJson(res, 400, { error: 'New orders must start as pending.' });
+      }
       const id = Number.isInteger(order.id) ? order.id : db.orderCounter;
-      const savedOrder = { ...order, id };
+      const savedOrder = { ...order, id, status: 'pending' };
       db.orders = [savedOrder, ...db.orders.filter(existing => existing.id !== id)];
       db.orderCounter = Math.max(db.orderCounter, id + 1);
       await writeDb(db);
