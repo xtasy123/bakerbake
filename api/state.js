@@ -14,10 +14,30 @@ module.exports = async function handler(req, res) {
       requireRole(req, 'cashier');
       const body = await readJson(req);
       const currentDb = await readDb();
+      const currentOrders = new Map((currentDb.orders || []).map(order => [String(order.id), order]));
+      const nextOrders = Array.isArray(body.orders) ? body.orders : [];
+      const nextOrderIds = new Set(nextOrders.map(order => String(order.id)));
+      const hasDeletedOrders = [...currentOrders.keys()].some(id => !nextOrderIds.has(id));
+      const hasProtectedMutation = nextOrders.some(order => {
+        const current = currentOrders.get(String(order.id));
+        if (!current) return false;
+        const unauthorizedVoid = order.status === 'voided'
+          && current.status !== 'voided'
+          && (current.status === 'done' || current.previouslyCompleted === true);
+        const clearedCompletionAudit = (current.status === 'done' && order.status === 'pending' && order.previouslyCompleted !== true)
+          || (current.previouslyCompleted === true && order.previouslyCompleted !== true);
+        const restoredVoidedOrder = current.status === 'voided' && order.status !== 'voided';
+        return unauthorizedVoid || clearedCompletionAudit || restoredVoidedOrder;
+      });
+      if (hasDeletedOrders || hasProtectedMutation) {
+        const error = new Error('Protected order history cannot be changed without authorization.');
+        error.statusCode = 403;
+        throw error;
+      }
       return sendJson(res, 200, await writeDb({
         ...currentDb,
         cart: body.cart && typeof body.cart === 'object' ? body.cart : {},
-        orders: Array.isArray(body.orders) ? body.orders : [],
+        orders: nextOrders,
         orderCounter: Number.isInteger(body.orderCounter) ? body.orderCounter : currentDb.orderCounter
       }));
     }

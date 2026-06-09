@@ -541,6 +541,9 @@
   .status-pending { background: var(--amber-light); color: var(--amber); }
   .status-ready { background: var(--accent-light); color: var(--accent); }
   .status-done { background: #e8f7ed; color: #157a3d; }
+  .status-voided { background: #fff0f0; color: #b4232d; }
+  .order-card.voided { background: #fffafa; border-color: #efcfd2; }
+  .order-card.voided .order-total { color: #b4232d; text-decoration: line-through; }
   .payment-cash { background: #f5f5f5; color: var(--text); }
   .payment-bpi { background: #fff0f0; color: #b41f2a; }
   .payment-unionbank { background: #fff4e5; color: #d96b00; }
@@ -574,6 +577,37 @@
   .order-action-btn:hover { background: var(--accent-light); border-color: var(--accent); color: var(--accent); }
   .order-action-btn.ready { background: var(--accent); border-color: var(--accent); color: white; }
   .order-action-btn.ready:hover { background: #333333; }
+  .order-footer-actions { display: flex; align-items: center; gap: 7px; }
+  .order-action-btn.void { color: #b4232d; border-color: #e8b9bd; }
+  .order-action-btn.void:hover { color: white; border-color: #b4232d; background: #b4232d; }
+  .void-detail { color: #b4232d; }
+  .void-form { display: grid; gap: 12px; margin: 16px 0 4px; }
+  .void-field label {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--text2);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .void-field select,
+  .void-field input {
+    width: 100%;
+    min-height: 42px;
+    padding: 9px 11px;
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    background: white;
+    color: var(--text);
+    font: inherit;
+    outline: none;
+  }
+  .void-field select:focus,
+  .void-field input:focus { border-color: var(--accent); }
+  .void-error { min-height: 17px; color: #b4232d; font-size: 12px; }
+  .btn-danger { background: #b4232d; border-color: #b4232d; color: white; }
+  .btn-danger:hover { background: #921b24; }
 
   /* ══════════════════════════════════════
      VIEW: Reports
@@ -1378,7 +1412,7 @@
     <button class="nav-btn" data-role-nav="cashier" onclick="showView('orders', this)">
       Orders <span id="pending-badge" class="badge" style="display:none">0</span>
     </button>
-    <button class="nav-btn" data-role-nav="admin" onclick="showView('reports', this)">Reports</button>
+    <button class="nav-btn" data-role-nav="shared" onclick="showView('reports', this)">Reports</button>
     <button class="nav-btn" data-role-nav="admin" onclick="showView('admin', this)">Menu Management</button>
   </nav>
   <div class="topbar-right">
@@ -1432,6 +1466,7 @@
       <div class="orders-segmented" aria-label="Order filter">
         <button class="orders-segment active" type="button" data-order-filter="pending" onclick="setOrderFilter('pending')">Pending</button>
         <button class="orders-segment" type="button" data-order-filter="completed" onclick="setOrderFilter('completed')">Completed</button>
+        <button class="orders-segment" type="button" data-order-filter="voided" onclick="setOrderFilter('voided')">Voided</button>
         <button class="orders-segment" type="button" data-order-filter="all" onclick="setOrderFilter('all')">All</button>
       </div>
     </div>
@@ -1453,6 +1488,15 @@
         <p class="orders-empty">No completed orders.</p>
       </div>
     </section>
+    <section class="orders-panel" id="voided-orders-panel">
+      <div class="orders-panel-header">
+        <h2>Voided</h2>
+        <span class="orders-count" id="voided-orders-count">0 orders</span>
+      </div>
+      <div class="orders-grid" id="voided-orders-grid">
+        <p class="orders-empty">No voided orders.</p>
+      </div>
+    </section>
   </div>
 
   <!-- ── VIEW: Reports ── -->
@@ -1464,7 +1508,7 @@
       </div>
       <div class="reports-tabs" role="tablist" aria-label="Report period">
         <button class="reports-tab active" id="reports-tab-today" type="button" role="tab" aria-selected="true" onclick="setReportView('today')">Today</button>
-        <button class="reports-tab" id="reports-tab-history" type="button" role="tab" aria-selected="false" onclick="setReportView('history')">History</button>
+        <button class="reports-tab" id="reports-tab-history" data-admin-only type="button" role="tab" aria-selected="false" onclick="setReportView('history')">History</button>
       </div>
     </div>
 
@@ -1619,7 +1663,7 @@
     <span class="nav-icon">✓</span>
     <span>Orders</span>
   </button>
-  <button class="mobile-nav-btn" data-role-nav="admin" data-mobile-section="reports" onclick="showMobileSection('reports', this)">
+  <button class="mobile-nav-btn" data-role-nav="shared" data-mobile-section="reports" onclick="showMobileSection('reports', this)">
     <span class="nav-icon">▦</span>
     <span>Reports</span>
   </button>
@@ -1702,6 +1746,46 @@
   </div>
 </div>
 
+<!-- Void Order Modal -->
+<div class="modal-overlay compact" id="void-modal">
+  <div class="modal">
+    <h2>Void order?</h2>
+    <p class="modal-message" id="void-message">This order will remain in the audit history and will be excluded from sales.</p>
+    <div class="void-form">
+      <div class="void-field">
+        <label for="void-reason">Reason</label>
+        <select id="void-reason" onchange="updateVoidReasonFields()">
+          <option value="">Select a reason</option>
+          <option value="Wrong item">Wrong item</option>
+          <option value="Duplicate order">Duplicate order</option>
+          <option value="Wrong payment method">Wrong payment method</option>
+          <option value="Customer cancellation">Customer cancellation</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="void-field" id="void-other-field" hidden>
+        <label for="void-other-reason">Other reason</label>
+        <input id="void-other-reason" type="text" maxlength="120">
+      </div>
+      <div id="void-admin-fields" hidden>
+        <div class="void-field">
+          <label for="void-admin-username">Admin Username</label>
+          <input id="void-admin-username" type="text" autocomplete="username">
+        </div>
+        <div class="void-field" style="margin-top:12px">
+          <label for="void-admin-password">Admin Password</label>
+          <input id="void-admin-password" type="password" autocomplete="current-password">
+        </div>
+      </div>
+      <div class="void-error" id="void-error"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeVoidModal()">Cancel</button>
+      <button class="btn-confirm btn-danger" id="confirm-void-btn" onclick="confirmVoidOrder()">Void Order</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1762,6 +1846,7 @@ let currentUser = null;
 let pendingSizeProductId = null;
 let pendingUndoTimer = null;
 let pendingUndoOrderId = null;
+let pendingVoidOrderId = null;
 let backendSaveTimer = null;
 let isApplyingBackendState = false;
 
@@ -1905,12 +1990,15 @@ function isAdmin() {
 }
 
 function canAccessView(id) {
-  return isAdmin() ? ['reports', 'admin'].includes(id) : ['pos', 'orders'].includes(id);
+  return isAdmin() ? ['reports', 'admin'].includes(id) : ['pos', 'orders', 'reports'].includes(id);
 }
 
 function applyRoleUI() {
   document.querySelectorAll('[data-role-nav]').forEach(element => {
-    element.hidden = element.dataset.roleNav !== currentUser?.role;
+    element.hidden = !['shared', currentUser?.role].includes(element.dataset.roleNav);
+  });
+  document.querySelectorAll('[data-admin-only]').forEach(element => {
+    element.hidden = !isAdmin();
   });
   document.body.classList.toggle('admin-session', isAdmin());
 }
@@ -2657,26 +2745,33 @@ function confirmPayment() {
 // ── Orders ──
 function renderOrders() {
   const query = (document.getElementById('orders-search')?.value || '').trim().toLowerCase();
-  const allPending = orders.filter(o => o.status !== 'done');
+  const allPending = orders.filter(o => o.status === 'pending');
   const allCompleted = orders.filter(o => o.status === 'done');
+  const allVoided = orders.filter(o => o.status === 'voided');
   const matchesQuery = order => !query || orderMatchesQuery(order, query);
   const pending = allPending.filter(matchesQuery);
   const completed = allCompleted.filter(matchesQuery);
-  const showPending = activeOrderFilter !== 'completed';
-  const showCompleted = activeOrderFilter !== 'pending';
+  const voided = allVoided.filter(matchesQuery);
+  const showPending = ['pending', 'all'].includes(activeOrderFilter);
+  const showCompleted = ['completed', 'all'].includes(activeOrderFilter);
+  const showVoided = ['voided', 'all'].includes(activeOrderFilter);
   const pendingPanel = document.getElementById('pending-orders-panel');
   const completedPanel = document.getElementById('completed-orders-panel');
+  const voidedPanel = document.getElementById('voided-orders-panel');
   const pendingGrid = document.getElementById('pending-orders-grid');
   const completedGrid = document.getElementById('completed-orders-grid');
+  const voidedGrid = document.getElementById('voided-orders-grid');
 
   if (pendingPanel) pendingPanel.style.display = showPending ? 'flex' : 'none';
   if (completedPanel) completedPanel.style.display = showCompleted ? 'flex' : 'none';
+  if (voidedPanel) voidedPanel.style.display = showVoided ? 'flex' : 'none';
   document.querySelectorAll('.orders-segment').forEach(button => {
     button.classList.toggle('active', button.dataset.orderFilter === activeOrderFilter);
   });
 
   document.getElementById('pending-orders-count').textContent = formatPanelCount(pending.length, allPending.length, query);
   document.getElementById('completed-orders-count').textContent = formatPanelCount(completed.length, allCompleted.length, query);
+  document.getElementById('voided-orders-count').textContent = formatPanelCount(voided.length, allVoided.length, query);
 
   pendingGrid.innerHTML = pending.length
     ? pending.map(orderCardHTML).join('')
@@ -2685,6 +2780,10 @@ function renderOrders() {
   completedGrid.innerHTML = completed.length
     ? completed.map(orderCardHTML).join('')
     : `<p class="orders-empty">${query ? 'No matching completed orders.' : 'No completed orders.'}</p>`;
+
+  voidedGrid.innerHTML = voided.length
+    ? voided.map(orderCardHTML).join('')
+    : `<p class="orders-empty">${query ? 'No matching voided orders.' : 'No voided orders.'}</p>`;
 }
 
 function setOrderFilter(filter) {
@@ -2702,16 +2801,19 @@ function getTodayOrders() {
 }
 
 function getReportStats(reportOrders) {
-  const completed = reportOrders.filter(order => order.status === 'done');
-  const pending = reportOrders.filter(order => order.status !== 'done');
-  const totalSales = reportOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
+  const salesOrders = reportOrders.filter(order => order.status !== 'voided');
+  const completed = salesOrders.filter(order => order.status === 'done');
+  const pending = salesOrders.filter(order => order.status === 'pending');
+  const voided = reportOrders.filter(order => order.status === 'voided');
+  const totalSales = salesOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
+  const voidedAmount = voided.reduce((sum, order) => sum + Number(order.total || 0), 0);
   const paymentStats = PAYMENT_METHODS.reduce((acc, method) => {
     acc[method.id] = { ...method, count: 0, amount: 0 };
     return acc;
   }, {});
   const productStats = {};
 
-  reportOrders.forEach(order => {
+  salesOrders.forEach(order => {
     const payment = getOrderPayment(order);
     if (paymentStats[payment.method]) {
       paymentStats[payment.method].count += 1;
@@ -2727,10 +2829,13 @@ function getReportStats(reportOrders) {
 
   return {
     orders: reportOrders,
+    salesOrders,
     completed,
     pending,
+    voided,
+    voidedAmount,
     totalSales,
-    average: reportOrders.length ? Math.round(totalSales / reportOrders.length) : 0,
+    average: salesOrders.length ? Math.round(totalSales / salesOrders.length) : 0,
     paymentStats,
     productStats
   };
@@ -2779,6 +2884,10 @@ function statusBreakdownHTML(stats, emptyMessage) {
         <div><div class="name">Completed</div><div class="meta">Marked done</div></div>
         <div class="amount">${stats.completed.length}</div>
       </div>
+      <div class="report-row">
+        <div><div class="name void-detail">Voided</div><div class="meta">${formatMoney(stats.voidedAmount)} excluded from sales</div></div>
+        <div class="amount void-detail">${stats.voided.length}</div>
+      </div>
     `
     : `<p class="report-empty">${emptyMessage}</p>`;
 }
@@ -2791,7 +2900,7 @@ function renderReports() {
 
   document.getElementById('reports-date').textContent = formatReportDate(todayKey);
   document.getElementById('report-sales').textContent = formatMoney(stats.totalSales);
-  document.getElementById('report-sales-count').textContent = `${todayOrders.length} order${todayOrders.length === 1 ? '' : 's'}`;
+  document.getElementById('report-sales-count').textContent = `${stats.salesOrders.length} sale${stats.salesOrders.length === 1 ? '' : 's'} · ${stats.voided.length} voided`;
   document.getElementById('report-average').textContent = formatMoney(stats.average);
   document.getElementById('report-cash-expected').textContent = formatMoney(cash.amount);
   document.getElementById('report-cash-count').textContent = `${cash.count} cash order${cash.count === 1 ? '' : 's'}`;
@@ -2806,6 +2915,7 @@ function renderReports() {
 }
 
 function setReportView(view) {
+  if (view === 'history' && !isAdmin()) return;
   activeReportView = view === 'history' ? 'history' : 'today';
   updateReportView();
 }
@@ -2850,11 +2960,11 @@ function historyDayHTML(dateKey, stats) {
       <summary>
         <div>
           <div class="history-date">${formatReportDate(dateKey)}</div>
-          <div class="history-meta">${stats.orders.length} order${stats.orders.length === 1 ? '' : 's'}${paymentSummary ? ` · ${paymentSummary}` : ''}</div>
+          <div class="history-meta">${stats.salesOrders.length} sale${stats.salesOrders.length === 1 ? '' : 's'} · ${stats.voided.length} voided${paymentSummary ? ` · ${paymentSummary}` : ''}</div>
         </div>
         <div class="history-metric"><span>Sales</span><strong>${formatMoney(stats.totalSales)}</strong></div>
         <div class="history-metric"><span>Cash Expected</span><strong>${formatMoney(cash.amount)}</strong></div>
-        <div class="history-metric"><span>Status</span><strong>${stats.completed.length}/${stats.pending.length}</strong></div>
+        <div class="history-metric"><span>Done / Void</span><strong>${stats.completed.length}/${stats.voided.length}</strong></div>
       </summary>
       <div class="history-details">
         <div class="history-detail">
@@ -2869,6 +2979,7 @@ function historyDayHTML(dateKey, stats) {
           <h3>Order Status</h3>
           <div class="history-detail-row"><span>Completed</span><strong>${stats.completed.length}</strong></div>
           <div class="history-detail-row"><span>Pending</span><strong>${stats.pending.length}</strong></div>
+          <div class="history-detail-row"><span>Voided</span><strong>${stats.voided.length} · ${formatMoney(stats.voidedAmount)}</strong></div>
           <div class="history-detail-row"><span>Average Order</span><strong>${formatMoney(stats.average)}</strong></div>
         </div>
       </div>
@@ -2950,7 +3061,10 @@ function orderMatchesQuery(order, query) {
     order.id,
     order.customerName,
     order.cashier,
-    order.status === 'done' ? 'completed' : 'pending',
+    order.status === 'done' ? 'completed' : order.status,
+    order.voidReason,
+    order.voidedBy,
+    order.authorizedBy,
     payment.reference,
     formatOrderDateTime(order),
     ...(order.items || []).flatMap(item => [item.name, item.size])
@@ -2960,15 +3074,16 @@ function orderMatchesQuery(order, query) {
 
 function orderCardHTML(o) {
   const payment = getOrderPayment(o);
-  const statusLabel = o.status === 'done' ? 'Completed' : 'Pending';
+  const statusLabel = o.status === 'done' ? 'Completed' : o.status === 'voided' ? 'Voided' : 'Pending';
+  const isVoided = o.status === 'voided';
   return `
-    <div class="order-card" id="order-${o.id}">
+    <div class="order-card${isVoided ? ' voided' : ''}" id="order-${o.id}">
       <div class="order-card-header">
         <div>
           <div class="order-num">#${o.id}</div>
           <div class="order-time">${formatOrderDateTime(o)}</div>
           <div class="order-meta">
-            <input class="order-customer-input" value="${escapeHTML(o.customerName || 'Walk-in')}" aria-label="Customer name" onchange="updateOrderCustomer(${o.id}, this.value)">
+            <input class="order-customer-input" value="${escapeHTML(o.customerName || 'Walk-in')}" aria-label="Customer name" onchange="updateOrderCustomer(${o.id}, this.value)" ${isVoided ? 'disabled' : ''}>
           </div>
         </div>
         <div class="order-badges">
@@ -2987,12 +3102,20 @@ function orderCardHTML(o) {
         <div><span>Payment</span><strong>${payment.label}</strong></div>
         ${payment.reference ? `<div><span>Ref</span><strong>${escapeHTML(payment.reference)}</strong></div>` : ''}
         ${o.completedAt ? `<div><span>Completed</span><strong>${formatOrderDateTime({ createdAt: o.completedAt })}</strong></div>` : ''}
+        ${isVoided ? `
+          <div><span class="void-detail">Void reason</span><strong class="void-detail">${escapeHTML(o.voidReason || 'Not specified')}</strong></div>
+          <div><span>Voided by</span><strong>${escapeHTML(o.voidedBy || 'Cashier')}</strong></div>
+          ${o.authorizedBy ? `<div><span>Authorized by</span><strong>${escapeHTML(o.authorizedBy)}</strong></div>` : ''}
+          <div><span>Voided</span><strong>${formatOrderDateTime({ createdAt: o.voidedAt })}</strong></div>
+        ` : ''}
       </div>
       <div class="order-card-footer">
         <div class="order-total">${formatMoney(o.total)}</div>
-        ${o.status !== 'done'
-          ? `<button class="order-action-btn ready" onclick="completeOrder(${o.id})">Complete</button>`
-          : `<span style="font-size:12px; color:var(--text3)">Completed</span>`}
+        <div class="order-footer-actions">
+          ${o.status === 'pending' ? `<button class="order-action-btn ready" onclick="completeOrder(${o.id})">Complete</button>` : ''}
+          ${o.status !== 'voided' ? `<button class="order-action-btn void" onclick="openVoidModal(${o.id})">Void</button>` : ''}
+          ${isVoided ? `<span style="font-size:12px; color:#b4232d">Excluded from sales</span>` : ''}
+        </div>
       </div>
     </div>
   `;
@@ -3021,7 +3144,7 @@ function updateOrderCustomer(id, value) {
 function completeOrder(id) {
   if (!isCashier()) return;
   const o = orders.find(x => x.id === id);
-  if (!o) return;
+  if (!o || o.status !== 'pending') return;
   o.status = 'done';
   o.completedAt = new Date().toISOString();
   saveState();
@@ -3037,7 +3160,9 @@ function completeOrder(id) {
 function undoCompleteOrder(id) {
   if (!isCashier()) return;
   const o = orders.find(x => x.id === id);
-  if (!o) return;
+  if (!o || o.status !== 'done') return;
+  o.previouslyCompleted = true;
+  o.lastCompletedAt = o.completedAt || new Date().toISOString();
   o.status = 'pending';
   delete o.completedAt;
   saveState();
@@ -3045,6 +3170,110 @@ function undoCompleteOrder(id) {
   renderReports();
   updatePendingBadge();
   showToast(`Order #${o.id} moved back to pending`);
+}
+
+function openVoidModal(id) {
+  if (!isCashier()) return;
+  const order = orders.find(item => item.id === id);
+  if (!order || order.status === 'voided') return;
+  pendingVoidOrderId = id;
+  const needsAdmin = order.status === 'done' || order.previouslyCompleted === true;
+  document.getElementById('void-message').textContent = needsAdmin
+    ? `Order #${id} is completed. Admin authorization is required before it can be voided.`
+    : `Order #${id} will remain in the audit history and will be excluded from sales.`;
+  document.getElementById('void-admin-fields').hidden = !needsAdmin;
+  document.getElementById('void-reason').value = '';
+  document.getElementById('void-other-reason').value = '';
+  document.getElementById('void-admin-username').value = '';
+  document.getElementById('void-admin-password').value = '';
+  document.getElementById('void-error').textContent = '';
+  updateVoidReasonFields();
+  document.getElementById('void-modal').classList.add('open');
+}
+
+function closeVoidModal() {
+  pendingVoidOrderId = null;
+  document.getElementById('void-modal').classList.remove('open');
+}
+
+function updateVoidReasonFields() {
+  const isOther = document.getElementById('void-reason').value === 'Other';
+  document.getElementById('void-other-field').hidden = !isOther;
+  if (isOther) document.getElementById('void-other-reason').focus();
+}
+
+async function authorizeCompletedVoid(order, reason, username, password) {
+  if (BACKEND_ENABLED) {
+    const result = await apiRequest('/api/void-order', {
+      method: 'POST',
+      body: JSON.stringify({
+        orderId: order.id,
+        reason,
+        adminUsername: normalizeUsername(username),
+        adminPassword: password
+      })
+    });
+    return { order: result.order, user: { name: result.order?.authorizedBy } };
+  }
+
+  const admin = CASHIERS.find(user =>
+    user.role === 'admin'
+    && user.username === normalizeUsername(username)
+    && user.password === password
+  );
+  if (!admin) throw new Error('Invalid admin username or password.');
+  return { user: admin };
+}
+
+async function confirmVoidOrder() {
+  if (!isCashier()) return;
+  const order = orders.find(item => item.id === pendingVoidOrderId);
+  if (!order || order.status === 'voided') return closeVoidModal();
+
+  const error = document.getElementById('void-error');
+  const selectedReason = document.getElementById('void-reason').value;
+  const otherReason = document.getElementById('void-other-reason').value.trim();
+  const reason = selectedReason === 'Other' ? otherReason : selectedReason;
+  if (!reason) {
+    error.textContent = 'Select or enter a void reason.';
+    return;
+  }
+
+  const button = document.getElementById('confirm-void-btn');
+  button.disabled = true;
+  error.textContent = '';
+  try {
+    let authorizingAdmin = null;
+    if (order.status === 'done' || order.previouslyCompleted === true) {
+      const username = document.getElementById('void-admin-username').value;
+      const password = document.getElementById('void-admin-password').value;
+      if (!username || !password) throw new Error('Enter the admin username and password.');
+      authorizingAdmin = await authorizeCompletedVoid(order, reason, username, password);
+    }
+
+    if (authorizingAdmin?.order) {
+      Object.assign(order, authorizingAdmin.order);
+    } else {
+      order.previousStatus = order.status;
+      order.status = 'voided';
+      order.voidReason = reason;
+      order.voidedAt = new Date().toISOString();
+      order.voidedBy = currentUser.name || currentUser.username;
+      if (authorizingAdmin?.user) {
+        order.authorizedBy = authorizingAdmin.user.name || authorizingAdmin.user.username;
+      }
+    }
+    saveState();
+    closeVoidModal();
+    renderOrders();
+    renderReports();
+    updatePendingBadge();
+    showToast(`Order #${order.id} voided`);
+  } catch (authorizationError) {
+    error.textContent = authorizationError.message || 'Unable to authorize this void.';
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function updatePendingBadge() {
@@ -3175,6 +3404,10 @@ document.getElementById('payment-modal').addEventListener('click', function(e) {
 
 document.getElementById('size-modal').addEventListener('click', function(e) {
   if (e.target === this) closeSizePicker();
+});
+
+document.getElementById('void-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeVoidModal();
 });
 
 document.getElementById('logout-modal').addEventListener('click', function(e) {
