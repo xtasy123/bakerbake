@@ -744,6 +744,28 @@
     font-size: 13px;
     font-weight: 700;
   }
+  .admin-image-picker {
+    display: grid;
+    grid-template-columns: 88px minmax(0, 1fr);
+    gap: 12px;
+    align-items: center;
+  }
+  .admin-image-preview {
+    width: 88px;
+    aspect-ratio: 1;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface2);
+    overflow: hidden;
+    display: grid;
+    place-items: center;
+    color: var(--text3);
+    font-size: 11px;
+    text-align: center;
+  }
+  .admin-image-preview img { width: 100%; height: 100%; object-fit: cover; }
+  .admin-file-input { width: 100%; color: var(--text2); font-size: 12px; }
+  .admin-upload-status { min-height: 18px; color: var(--text3); font-size: 12px; margin-top: 5px; }
   .admin-actions { display: flex; gap: 8px; margin-top: 4px; }
   .admin-actions button { min-height: 42px; flex: 1; }
   .admin-products { display: grid; gap: 8px; }
@@ -1448,8 +1470,15 @@
             </div>
           </div>
           <div class="admin-field">
-            <label for="admin-product-image">Image Path</label>
-            <input class="admin-input" id="admin-product-image" type="text" placeholder="images/product.jpg">
+            <label for="admin-product-file">Product Image</label>
+            <div class="admin-image-picker">
+              <div class="admin-image-preview" id="admin-image-preview">No image</div>
+              <div>
+                <input class="admin-file-input" id="admin-product-file" type="file" accept="image/jpeg,image/png,image/webp,image/avif" onchange="uploadAdminImage(this)">
+                <div class="admin-upload-status" id="admin-upload-status">JPEG, PNG, WebP, or AVIF</div>
+              </div>
+            </div>
+            <input id="admin-product-image" type="hidden">
           </div>
           <div id="admin-beverage-prices" class="admin-price-grid">
             <div class="admin-field">
@@ -1987,6 +2016,93 @@ function updateAdminPriceFields() {
   document.getElementById('admin-single-price').style.display = isPastry ? '' : 'none';
 }
 
+function setAdminImagePreview(imageUrl) {
+  const preview = document.getElementById('admin-image-preview');
+  if (!preview) return;
+  preview.innerHTML = imageUrl
+    ? `<img src="${escapeHTML(imageUrl)}" alt="Product preview">`
+    : 'No image';
+}
+
+function loadImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Could not read the selected image.'));
+    };
+    image.src = objectUrl;
+  });
+}
+
+function canvasToBlob(canvas, type, quality) {
+  return new Promise(resolve => canvas.toBlob(resolve, type, quality));
+}
+
+async function prepareAdminImage(file) {
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/avif'];
+  if (!allowedTypes.includes(file.type)) throw new Error('Select a JPEG, PNG, WebP, or AVIF image.');
+
+  const image = await loadImageFile(file);
+  const maxDimension = 1600;
+  const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+  canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+
+  let blob = await canvasToBlob(canvas, 'image/webp', 0.82);
+  let contentType = 'image/webp';
+  if (!blob) {
+    blob = await canvasToBlob(canvas, 'image/jpeg', 0.84);
+    contentType = 'image/jpeg';
+  }
+  if (!blob || blob.size > 2_000_000) throw new Error('The processed image is still too large. Choose a smaller image.');
+
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Could not prepare the image.'));
+    reader.readAsDataURL(blob);
+  });
+  return {
+    contentType,
+    fileName: file.name,
+    data: String(dataUrl).split(',')[1]
+  };
+}
+
+async function uploadAdminImage(input) {
+  if (!isAdmin() || !input.files?.[0]) return;
+  const status = document.getElementById('admin-upload-status');
+  const previousUrl = document.getElementById('admin-product-image').value;
+  status.textContent = 'Preparing image...';
+  input.disabled = true;
+  try {
+    const prepared = await prepareAdminImage(input.files[0]);
+    status.textContent = 'Uploading image...';
+    const result = await apiRequest('/api/product-image', {
+      method: 'POST',
+      body: JSON.stringify(prepared)
+    });
+    document.getElementById('admin-product-image').value = result.url;
+    setAdminImagePreview(result.url);
+    status.textContent = 'Image uploaded';
+  } catch (error) {
+    document.getElementById('admin-product-image').value = previousUrl;
+    setAdminImagePreview(previousUrl);
+    status.textContent = error.message || 'Image upload failed';
+  } finally {
+    input.disabled = false;
+    input.value = '';
+  }
+}
+
 function resetAdminProductForm() {
   document.getElementById('admin-form-title').textContent = 'Add Product';
   document.getElementById('admin-product-id').value = '';
@@ -1994,6 +2110,9 @@ function resetAdminProductForm() {
   document.getElementById('admin-product-category').value = 'HOT';
   document.getElementById('admin-product-subgroup').value = '';
   document.getElementById('admin-product-image').value = '';
+  document.getElementById('admin-product-file').value = '';
+  document.getElementById('admin-upload-status').textContent = 'JPEG, PNG, WebP, or AVIF';
+  setAdminImagePreview('');
   document.getElementById('admin-price-8oz').value = '';
   document.getElementById('admin-price-12oz').value = '';
   document.getElementById('admin-product-price').value = '';
@@ -2011,6 +2130,9 @@ function editAdminProduct(id) {
   document.getElementById('admin-product-category').value = product.filter;
   document.getElementById('admin-product-subgroup').value = product.subgroup || '';
   document.getElementById('admin-product-image').value = product.imageUrl || '';
+  document.getElementById('admin-product-file').value = '';
+  document.getElementById('admin-upload-status').textContent = product.imageUrl ? 'Current product image' : 'JPEG, PNG, WebP, or AVIF';
+  setAdminImagePreview(product.imageUrl || '');
   document.getElementById('admin-product-active').checked = product.active !== false;
   document.getElementById('admin-product-price').value = product.price || '';
   document.getElementById('admin-price-8oz').value = product.variants?.find(variant => variant.id === '8oz')?.price || '';

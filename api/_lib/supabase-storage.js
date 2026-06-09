@@ -1,5 +1,7 @@
+const crypto = require('crypto');
 const SUPABASE_URL = normalizeSupabaseUrl(process.env.SUPABASE_URL || '');
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const PRODUCT_IMAGE_BUCKET = process.env.PRODUCT_IMAGE_BUCKET || 'product-images';
 
 function normalizeSupabaseUrl(value) {
   const raw = String(value || '').trim();
@@ -153,6 +155,64 @@ async function writeProducts(products) {
   return products;
 }
 
+async function uploadProductImage({ data, contentType }) {
+  ensureSupabaseConfig();
+  const extensions = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/avif': 'avif'
+  };
+  const extension = extensions[contentType];
+  if (!extension || typeof data !== 'string' || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) {
+    const error = new Error('Invalid image upload.');
+    error.statusCode = 400;
+    throw error;
+  }
+  const bytes = Buffer.from(data, 'base64');
+  if (!bytes.length || bytes.length > 2_000_000) {
+    const error = new Error('Image must be 2 MB or smaller after processing.');
+    error.statusCode = 413;
+    throw error;
+  }
+  const validSignature =
+    (contentType === 'image/jpeg' && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) ||
+    (contentType === 'image/png' && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) ||
+    (contentType === 'image/webp' && bytes.subarray(0, 4).toString() === 'RIFF' && bytes.subarray(8, 12).toString() === 'WEBP') ||
+    (contentType === 'image/avif' && bytes.subarray(4, 12).toString().startsWith('ftypavi'));
+  if (!validSignature) {
+    const error = new Error('Uploaded file does not match its image type.');
+    error.statusCode = 400;
+    throw error;
+  }
+  const objectPath = `products/${Date.now()}-${crypto.randomUUID()}.${extension}`;
+  const response = await fetch(`${SUPABASE_URL}/storage/v1/object/${PRODUCT_IMAGE_BUCKET}/${objectPath}`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': contentType,
+      'x-upsert': 'false'
+    },
+    body: bytes
+  });
+  const responseBody = await response.text();
+  if (!response.ok) {
+    let message = responseBody;
+    try {
+      const parsed = JSON.parse(responseBody);
+      message = parsed.message || parsed.error || message;
+    } catch {}
+    const error = new Error(message || `Image upload failed: ${response.status}`);
+    error.statusCode = response.status;
+    throw error;
+  }
+  return {
+    path: objectPath,
+    url: `${SUPABASE_URL}/storage/v1/object/public/${PRODUCT_IMAGE_BUCKET}/${objectPath}`
+  };
+}
+
 async function readJson(req) {
   if (req.body && typeof req.body === 'object') return req.body;
   if (typeof req.body === 'string') return req.body ? JSON.parse(req.body) : {};
@@ -173,6 +233,7 @@ module.exports = {
   readDb,
   writeDb,
   writeProducts,
+  uploadProductImage,
   readJson,
   sendJson,
   sendError

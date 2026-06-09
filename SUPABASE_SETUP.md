@@ -9,6 +9,7 @@
    - `SUPABASE_SERVICE_ROLE_KEY`
    - `SESSION_SECRET`
    - `POS_USERS_JSON`
+   - `PRODUCT_IMAGE_BUCKET` (optional; defaults to `product-images`)
 6. Generate password hashes:
 
 ```bash
@@ -34,6 +35,8 @@ When Supabase env vars are present, the backend stores orders, closeouts, and th
 
 For an existing Supabase project, run the latest `supabase/schema.sql` again. It safely adds the `product_catalog` state key without deleting current orders.
 
+The same script creates a public `product-images` Storage bucket. Admin uploads pass through the authenticated backend; the service-role key is never exposed to the browser. Uploaded images are resized in the browser and limited to 2 MB.
+
 The role values in `POS_USERS_JSON` must be exactly:
 
 - `cashier`: Register and Orders access.
@@ -50,6 +53,7 @@ SUPABASE_URL
 SUPABASE_SERVICE_ROLE_KEY
 SESSION_SECRET
 POS_USERS_JSON
+PRODUCT_IMAGE_BUCKET
 ```
 
 Generate password hashes locally:

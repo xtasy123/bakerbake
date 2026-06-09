@@ -14,6 +14,7 @@ const PORT = Number(process.env.PORT || 3000);
 const SUPABASE_URL = normalizeSupabaseUrl(process.env.SUPABASE_URL || '');
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const USE_SUPABASE = Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY);
+const PRODUCT_IMAGE_BUCKET = process.env.PRODUCT_IMAGE_BUCKET || 'product-images';
 const SESSION_SECRET = process.env.SESSION_SECRET || '';
 const POS_USERS_JSON = process.env.POS_USERS_JSON || '[]';
 const TOKEN_TTL_SECONDS = Number(process.env.TOKEN_TTL_SECONDS || 60 * 60 * 12);
@@ -242,6 +243,68 @@ async function supabaseFetch(table, options = {}) {
   return data;
 }
 
+async function uploadProductImage({ data, contentType }) {
+  if (!USE_SUPABASE) {
+    const error = new Error('Supabase Storage is not configured.');
+    error.statusCode = 500;
+    throw error;
+  }
+  const extensions = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/avif': 'avif'
+  };
+  const extension = extensions[contentType];
+  if (!extension || typeof data !== 'string' || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) {
+    const error = new Error('Invalid image upload.');
+    error.statusCode = 400;
+    throw error;
+  }
+  const bytes = Buffer.from(data, 'base64');
+  if (!bytes.length || bytes.length > 2_000_000) {
+    const error = new Error('Image must be 2 MB or smaller after processing.');
+    error.statusCode = 413;
+    throw error;
+  }
+  const validSignature =
+    (contentType === 'image/jpeg' && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) ||
+    (contentType === 'image/png' && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) ||
+    (contentType === 'image/webp' && bytes.subarray(0, 4).toString() === 'RIFF' && bytes.subarray(8, 12).toString() === 'WEBP') ||
+    (contentType === 'image/avif' && bytes.subarray(4, 12).toString().startsWith('ftypavi'));
+  if (!validSignature) {
+    const error = new Error('Uploaded file does not match its image type.');
+    error.statusCode = 400;
+    throw error;
+  }
+  const objectPath = `products/${Date.now()}-${crypto.randomUUID()}.${extension}`;
+  const response = await fetch(`${SUPABASE_URL}/storage/v1/object/${PRODUCT_IMAGE_BUCKET}/${objectPath}`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': contentType,
+      'x-upsert': 'false'
+    },
+    body: bytes
+  });
+  const responseBody = await response.text();
+  if (!response.ok) {
+    let message = responseBody;
+    try {
+      const parsed = JSON.parse(responseBody);
+      message = parsed.message || parsed.error || message;
+    } catch {}
+    const error = new Error(message || `Image upload failed: ${response.status}`);
+    error.statusCode = response.status;
+    throw error;
+  }
+  return {
+    path: objectPath,
+    url: `${SUPABASE_URL}/storage/v1/object/public/${PRODUCT_IMAGE_BUCKET}/${objectPath}`
+  };
+}
+
 async function readSupabaseDb() {
   const [ordersRows, counterRows, productRows, closeoutRows] = await Promise.all([
     supabaseFetch('orders', { query: '?select=*&order=id.desc' }),
@@ -340,7 +403,7 @@ async function readJson(req) {
   let body = '';
   for await (const chunk of req) {
     body += chunk;
-    if (body.length > 2_000_000) {
+    if (body.length > 4_000_000) {
       const error = new Error('Request body too large');
       error.statusCode = 413;
       throw error;
@@ -519,6 +582,13 @@ async function handleApi(req, res, url) {
     }
     const products = await writeProducts(body.products);
     sendJson(res, 200, { products });
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/product-image') {
+    requireRole(req, 'admin');
+    const uploaded = await uploadProductImage(await readJson(req));
+    sendJson(res, 201, uploaded);
     return;
   }
 

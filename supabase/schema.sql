@@ -47,6 +47,19 @@ insert into public.app_state (key, value)
 values ('product_catalog', '[]'::jsonb)
 on conflict (key) do nothing;
 
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'product-images',
+  'product-images',
+  true,
+  2097152,
+  array['image/jpeg', 'image/png', 'image/webp', 'image/avif']::text[]
+)
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
 alter table public.orders enable row level security;
 alter table public.closeouts enable row level security;
 alter table public.app_state enable row level security;
