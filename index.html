@@ -585,6 +585,46 @@
     gap: 18px;
   }
   #view-reports h1 { font-size: 20px; font-weight: 600; }
+  .reports-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+  .reports-date { color: var(--text3); font-size: 13px; font-weight: 700; margin-top: 3px; }
+  .reports-tabs {
+    display: inline-flex;
+    gap: 2px;
+    padding: 3px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface2);
+  }
+  .reports-tab {
+    min-height: 34px;
+    border: 0;
+    border-radius: 8px;
+    padding: 8px 14px;
+    background: transparent;
+    color: var(--text2);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+  .reports-tab.active {
+    background: var(--surface);
+    color: var(--accent);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  #reports-today {
+    display: grid;
+    gap: 18px;
+  }
+  #reports-today[hidden],
+  #reports-history[hidden] {
+    display: none;
+  }
   .reports-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(140px, 1fr));
@@ -650,46 +690,45 @@
   .report-row .meta { color: var(--text3); font-size: 12px; margin-top: 2px; }
   .report-row .amount { font-weight: 800; text-align: right; color: var(--text); }
   .report-empty { color: var(--text3); font-size: 14px; }
-  .closeout-form {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    margin-bottom: 12px;
-  }
-  .closeout-field label {
-    display: block;
-    color: var(--text3);
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    margin-bottom: 6px;
-  }
-  .closeout-input {
-    width: 100%;
-    min-height: 42px;
-    border: 1px solid var(--border2);
+  .report-history { display: grid; gap: 10px; }
+  .history-day {
+    border: 1px solid var(--border);
     border-radius: 8px;
-    padding: 9px 11px;
-    font-family: 'DM Sans', sans-serif;
-    font-size: 14px;
-    font-weight: 700;
-    outline: none;
+    background: var(--surface);
+    overflow: hidden;
   }
-  .closeout-input:focus { border-color: var(--accent); }
-  .closeout-result {
-    border-top: 1px solid var(--border);
-    padding-top: 12px;
+  .history-day summary {
+    list-style: none;
     display: grid;
-    gap: 8px;
+    grid-template-columns: minmax(0, 1fr) repeat(3, auto);
+    gap: 16px;
+    align-items: center;
+    padding: 14px 16px;
+    cursor: pointer;
   }
-  .closeout-result div {
+  .history-day summary::-webkit-details-marker { display: none; }
+  .history-date { font-size: 14px; font-weight: 800; }
+  .history-meta { color: var(--text3); font-size: 12px; margin-top: 2px; }
+  .history-metric { min-width: 78px; text-align: right; }
+  .history-metric span { display: block; color: var(--text3); font-size: 10px; font-weight: 700; text-transform: uppercase; }
+  .history-metric strong { display: block; margin-top: 2px; font-size: 14px; }
+  .history-details {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    border-top: 1px solid var(--border);
+    padding: 14px 16px;
+  }
+  .history-detail h3 { font-size: 12px; margin-bottom: 7px; }
+  .history-detail-row {
     display: flex;
     justify-content: space-between;
-    gap: 12px;
-    font-size: 13px;
+    gap: 10px;
+    padding: 5px 0;
+    color: var(--text2);
+    font-size: 12px;
   }
-  .closeout-result strong { font-weight: 800; }
+  .history-detail-row strong { color: var(--text); text-align: right; }
 
   /* ══════════════════════════════════════
      VIEW: Admin
@@ -1234,6 +1273,8 @@
       -webkit-overflow-scrolling: touch;
       gap: 16px;
     }
+    .reports-heading { align-items: flex-start; }
+    .reports-tabs { flex: 0 0 auto; }
     .reports-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -1245,8 +1286,13 @@
     .report-sections {
       grid-template-columns: 1fr;
     }
+    .history-day summary {
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .history-metric { min-width: 0; text-align: left; }
+    .history-details { grid-template-columns: 1fr; }
     .report-panel { padding: 14px; }
-    .closeout-form { grid-template-columns: 1fr; }
     #view-admin {
       height: 100%;
       padding: 16px 12px 24px;
@@ -1411,70 +1457,69 @@
 
   <!-- ── VIEW: Reports ── -->
   <div id="view-reports" class="view">
-    <h1>Reports</h1>
-    <div class="reports-grid" aria-label="Daily report summary">
-      <div class="report-card">
-        <span class="label">Today Sales</span>
-        <span class="value" id="report-sales">₱0</span>
-        <span class="hint" id="report-sales-count">0 orders</span>
+    <div class="reports-heading">
+      <div>
+        <h1>Reports</h1>
+        <p class="reports-date" id="reports-date"></p>
       </div>
-      <div class="report-card">
-        <span class="label">Average Order</span>
-        <span class="value" id="report-average">₱0</span>
-        <span class="hint">today</span>
-      </div>
-      <div class="report-card">
-        <span class="label">Cash Expected</span>
-        <span class="value" id="report-cash-expected">₱0</span>
-        <span class="hint" id="report-cash-count">0 cash orders</span>
-      </div>
-      <div class="report-card">
-        <span class="label">Completed</span>
-        <span class="value" id="report-completed">0</span>
-        <span class="hint" id="report-pending">0 pending</span>
+      <div class="reports-tabs" role="tablist" aria-label="Report period">
+        <button class="reports-tab active" id="reports-tab-today" type="button" role="tab" aria-selected="true" onclick="setReportView('today')">Today</button>
+        <button class="reports-tab" id="reports-tab-history" type="button" role="tab" aria-selected="false" onclick="setReportView('history')">History</button>
       </div>
     </div>
 
-    <div class="report-sections">
-      <section class="report-panel">
-        <h2>Payment Breakdown</h2>
-        <div id="report-payment-breakdown">
-          <p class="report-empty">No payments today.</p>
+    <div id="reports-today">
+      <div class="reports-grid" aria-label="Daily report summary">
+        <div class="report-card">
+          <span class="label">Today Sales</span>
+          <span class="value" id="report-sales">₱0</span>
+          <span class="hint" id="report-sales-count">0 orders</span>
         </div>
-      </section>
-
-      <section class="report-panel">
-        <h2>Top Products</h2>
-        <div id="report-top-products">
-          <p class="report-empty">No products sold today.</p>
+        <div class="report-card">
+          <span class="label">Average Order</span>
+          <span class="value" id="report-average">₱0</span>
+          <span class="hint">today</span>
         </div>
-      </section>
+        <div class="report-card">
+          <span class="label">Cash Expected</span>
+          <span class="value" id="report-cash-expected">₱0</span>
+          <span class="hint" id="report-cash-count">0 cash orders</span>
+        </div>
+        <div class="report-card">
+          <span class="label">Completed</span>
+          <span class="value" id="report-completed">0</span>
+          <span class="hint" id="report-pending">0 pending</span>
+        </div>
+      </div>
 
-      <section class="report-panel">
-        <h2>End-of-Day Closeout</h2>
-        <div class="closeout-form">
-          <div class="closeout-field">
-            <label for="actual-cash-input">Actual Cash</label>
-            <input class="closeout-input" id="actual-cash-input" type="number" min="0" inputmode="decimal" placeholder="0" oninput="renderReports()">
+      <div class="report-sections">
+        <section class="report-panel">
+          <h2>Payment Breakdown</h2>
+          <div id="report-payment-breakdown">
+            <p class="report-empty">No payments today.</p>
           </div>
-          <div class="closeout-field">
-            <label for="closeout-note-input">Note</label>
-            <input class="closeout-input" id="closeout-note-input" type="text" placeholder="Optional note">
-          </div>
-        </div>
-        <div class="closeout-result">
-          <div><span>Expected Cash</span><strong id="closeout-expected">₱0</strong></div>
-          <div><span>Actual Cash</span><strong id="closeout-actual">₱0</strong></div>
-          <div><span>Difference</span><strong id="closeout-difference">₱0</strong></div>
-        </div>
-      </section>
+        </section>
 
-      <section class="report-panel">
-        <h2>Order Status</h2>
-        <div id="report-status-breakdown">
-          <p class="report-empty">No orders today.</p>
-        </div>
-      </section>
+        <section class="report-panel">
+          <h2>Top Products</h2>
+          <div id="report-top-products">
+            <p class="report-empty">No products sold today.</p>
+          </div>
+        </section>
+
+        <section class="report-panel">
+          <h2>Order Status</h2>
+          <div id="report-status-breakdown">
+            <p class="report-empty">No orders today.</p>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <div id="reports-history" hidden>
+      <div class="report-history" id="report-history-list">
+        <p class="report-empty">No previous report days yet.</p>
+      </div>
     </div>
   </div>
 
@@ -1661,6 +1706,7 @@
 
 <script>
 const CURRENCY = '₱';
+const STORE_TIME_ZONE = 'Asia/Manila';
 const STORAGE_KEY = 'bakerbake-pos-state-v1';
 const SESSION_KEY = 'bakerbake-pos-session-v1';
 const BACKEND_ENABLED = location.protocol === 'http:' || location.protocol === 'https:';
@@ -1707,6 +1753,7 @@ let orders = [];
 let orderCounter = 1001;
 let activeCategory = 'ALL';
 let activeOrderFilter = 'pending';
+let activeReportView = 'today';
 let activeAdminProductFilter = 'ALL';
 let activeAdminProductSort = 'default';
 let adminProductSearch = '';
@@ -2654,20 +2701,17 @@ function getTodayOrders() {
   return orders.filter(isTodayOrder);
 }
 
-function renderReports() {
-  const todayOrders = getTodayOrders();
-  const completed = todayOrders.filter(o => o.status === 'done');
-  const pending = todayOrders.filter(o => o.status !== 'done');
-  const totalSales = todayOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
-  const average = todayOrders.length ? Math.round(totalSales / todayOrders.length) : 0;
-
+function getReportStats(reportOrders) {
+  const completed = reportOrders.filter(order => order.status === 'done');
+  const pending = reportOrders.filter(order => order.status !== 'done');
+  const totalSales = reportOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
   const paymentStats = PAYMENT_METHODS.reduce((acc, method) => {
     acc[method.id] = { ...method, count: 0, amount: 0 };
     return acc;
   }, {});
   const productStats = {};
 
-  todayOrders.forEach(order => {
+  reportOrders.forEach(order => {
     const payment = getOrderPayment(order);
     if (paymentStats[payment.method]) {
       paymentStats[payment.method].count += 1;
@@ -2681,33 +2725,37 @@ function renderReports() {
     });
   });
 
-  const cash = paymentStats.cash || { count: 0, amount: 0 };
-  document.getElementById('report-sales').textContent = formatMoney(totalSales);
-  document.getElementById('report-sales-count').textContent = `${todayOrders.length} order${todayOrders.length === 1 ? '' : 's'}`;
-  document.getElementById('report-average').textContent = formatMoney(average);
-  document.getElementById('report-cash-expected').textContent = formatMoney(cash.amount);
-  document.getElementById('report-cash-count').textContent = `${cash.count} cash order${cash.count === 1 ? '' : 's'}`;
-  document.getElementById('report-completed').textContent = completed.length;
-  document.getElementById('report-pending').textContent = `${pending.length} pending`;
+  return {
+    orders: reportOrders,
+    completed,
+    pending,
+    totalSales,
+    average: reportOrders.length ? Math.round(totalSales / reportOrders.length) : 0,
+    paymentStats,
+    productStats
+  };
+}
 
-  document.getElementById('report-payment-breakdown').innerHTML = PAYMENT_METHODS
-    .map(method => {
-      const stat = paymentStats[method.id];
-      return `
-        <div class="report-row">
-          <div>
-            <div class="name"><span class="pay-word ${method.id}">${method.label}</span></div>
-            <div class="meta">${stat.count} order${stat.count === 1 ? '' : 's'}</div>
-          </div>
-          <div class="amount">${formatMoney(stat.amount)}</div>
+function paymentBreakdownHTML(stats) {
+  return PAYMENT_METHODS.map(method => {
+    const stat = stats.paymentStats[method.id];
+    return `
+      <div class="report-row">
+        <div>
+          <div class="name"><span class="pay-word ${method.id}">${method.label}</span></div>
+          <div class="meta">${stat.count} order${stat.count === 1 ? '' : 's'}</div>
         </div>
-      `;
-    }).join('');
+        <div class="amount">${formatMoney(stat.amount)}</div>
+      </div>
+    `;
+  }).join('');
+}
 
-  const topProducts = Object.values(productStats)
+function topProductsHTML(stats, emptyMessage) {
+  const topProducts = Object.values(stats.productStats)
     .sort((a, b) => b.qty - a.qty || b.amount - a.amount)
     .slice(0, 6);
-  document.getElementById('report-top-products').innerHTML = topProducts.length
+  return topProducts.length
     ? topProducts.map(product => `
       <div class="report-row">
         <div>
@@ -2717,36 +2765,170 @@ function renderReports() {
         <div class="amount">${formatMoney(product.amount)}</div>
       </div>
     `).join('')
-    : `<p class="report-empty">No products sold today.</p>`;
+    : `<p class="report-empty">${emptyMessage}</p>`;
+}
 
-  const actualCash = parseFloat(document.getElementById('actual-cash-input')?.value) || 0;
-  const difference = actualCash - cash.amount;
-  document.getElementById('closeout-expected').textContent = formatMoney(cash.amount);
-  document.getElementById('closeout-actual').textContent = formatMoney(actualCash);
-  document.getElementById('closeout-difference').textContent = `${difference < 0 ? '-' : ''}${formatMoney(Math.abs(difference))}`;
-
-  document.getElementById('report-status-breakdown').innerHTML = todayOrders.length
+function statusBreakdownHTML(stats, emptyMessage) {
+  return stats.orders.length
     ? `
       <div class="report-row">
         <div><div class="name">Pending</div><div class="meta">Not yet completed</div></div>
-        <div class="amount">${pending.length}</div>
+        <div class="amount">${stats.pending.length}</div>
       </div>
       <div class="report-row">
         <div><div class="name">Completed</div><div class="meta">Marked done</div></div>
-        <div class="amount">${completed.length}</div>
+        <div class="amount">${stats.completed.length}</div>
       </div>
     `
-    : `<p class="report-empty">No orders today.</p>`;
+    : `<p class="report-empty">${emptyMessage}</p>`;
+}
+
+function renderReports() {
+  const todayKey = getManilaDateKey(new Date());
+  const todayOrders = getTodayOrders();
+  const stats = getReportStats(todayOrders);
+  const cash = stats.paymentStats.cash || { count: 0, amount: 0 };
+
+  document.getElementById('reports-date').textContent = formatReportDate(todayKey);
+  document.getElementById('report-sales').textContent = formatMoney(stats.totalSales);
+  document.getElementById('report-sales-count').textContent = `${todayOrders.length} order${todayOrders.length === 1 ? '' : 's'}`;
+  document.getElementById('report-average').textContent = formatMoney(stats.average);
+  document.getElementById('report-cash-expected').textContent = formatMoney(cash.amount);
+  document.getElementById('report-cash-count').textContent = `${cash.count} cash order${cash.count === 1 ? '' : 's'}`;
+  document.getElementById('report-completed').textContent = stats.completed.length;
+  document.getElementById('report-pending').textContent = `${stats.pending.length} pending`;
+  document.getElementById('report-payment-breakdown').innerHTML = paymentBreakdownHTML(stats);
+  document.getElementById('report-top-products').innerHTML = topProductsHTML(stats, 'No products sold today.');
+  document.getElementById('report-status-breakdown').innerHTML = statusBreakdownHTML(stats, 'No orders today.');
+
+  renderReportHistory(todayKey);
+  updateReportView();
+}
+
+function setReportView(view) {
+  activeReportView = view === 'history' ? 'history' : 'today';
+  updateReportView();
+}
+
+function updateReportView() {
+  const isHistory = activeReportView === 'history';
+  document.getElementById('reports-today').hidden = isHistory;
+  document.getElementById('reports-history').hidden = !isHistory;
+  ['today', 'history'].forEach(view => {
+    const button = document.getElementById(`reports-tab-${view}`);
+    const active = view === activeReportView;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-selected', String(active));
+  });
+}
+
+function renderReportHistory(todayKey) {
+  const groupedOrders = orders.reduce((groups, order) => {
+    const key = getOrderDateKey(order);
+    if (!key || key === todayKey) return groups;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(order);
+    return groups;
+  }, {});
+
+  const historyDays = Object.entries(groupedOrders).sort(([a], [b]) => b.localeCompare(a));
+  const container = document.getElementById('report-history-list');
+  container.innerHTML = historyDays.length
+    ? historyDays.map(([dateKey, dayOrders]) => historyDayHTML(dateKey, getReportStats(dayOrders))).join('')
+    : '<p class="report-empty">No previous report days yet.</p>';
+}
+
+function historyDayHTML(dateKey, stats) {
+  const cash = stats.paymentStats.cash || { count: 0, amount: 0 };
+  const paymentSummary = PAYMENT_METHODS
+    .filter(method => stats.paymentStats[method.id].count)
+    .map(method => `${method.label} ${formatMoney(stats.paymentStats[method.id].amount)}`)
+    .join(' · ');
+
+  return `
+    <details class="history-day">
+      <summary>
+        <div>
+          <div class="history-date">${formatReportDate(dateKey)}</div>
+          <div class="history-meta">${stats.orders.length} order${stats.orders.length === 1 ? '' : 's'}${paymentSummary ? ` · ${paymentSummary}` : ''}</div>
+        </div>
+        <div class="history-metric"><span>Sales</span><strong>${formatMoney(stats.totalSales)}</strong></div>
+        <div class="history-metric"><span>Cash Expected</span><strong>${formatMoney(cash.amount)}</strong></div>
+        <div class="history-metric"><span>Status</span><strong>${stats.completed.length}/${stats.pending.length}</strong></div>
+      </summary>
+      <div class="history-details">
+        <div class="history-detail">
+          <h3>Payment Breakdown</h3>
+          ${historyPaymentDetailsHTML(stats)}
+        </div>
+        <div class="history-detail">
+          <h3>Top Products</h3>
+          ${historyProductDetailsHTML(stats)}
+        </div>
+        <div class="history-detail">
+          <h3>Order Status</h3>
+          <div class="history-detail-row"><span>Completed</span><strong>${stats.completed.length}</strong></div>
+          <div class="history-detail-row"><span>Pending</span><strong>${stats.pending.length}</strong></div>
+          <div class="history-detail-row"><span>Average Order</span><strong>${formatMoney(stats.average)}</strong></div>
+        </div>
+      </div>
+    </details>
+  `;
+}
+
+function historyPaymentDetailsHTML(stats) {
+  return PAYMENT_METHODS.map(method => {
+    const payment = stats.paymentStats[method.id];
+    return `<div class="history-detail-row"><span>${method.label} (${payment.count})</span><strong>${formatMoney(payment.amount)}</strong></div>`;
+  }).join('');
+}
+
+function historyProductDetailsHTML(stats) {
+  const products = Object.values(stats.productStats)
+    .sort((a, b) => b.qty - a.qty || b.amount - a.amount)
+    .slice(0, 6);
+  return products.length
+    ? products.map(product => `<div class="history-detail-row"><span>${escapeHTML(product.name)} (${product.qty})</span><strong>${formatMoney(product.amount)}</strong></div>`).join('')
+    : '<p class="report-empty">No products sold.</p>';
+}
+
+function getOrderDate(order) {
+  const source = order.createdAt || `${order.date || ''} ${order.time || ''}`.trim();
+  const date = source ? new Date(source) : null;
+  return date && !Number.isNaN(date.getTime()) ? date : null;
+}
+
+function getManilaDateKey(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: STORE_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(date);
+  const getPart = type => parts.find(part => part.type === type)?.value || '';
+  return `${getPart('year')}-${getPart('month')}-${getPart('day')}`;
+}
+
+function getOrderDateKey(order) {
+  const date = getOrderDate(order);
+  return date ? getManilaDateKey(date) : '';
+}
+
+function formatReportDate(dateKey) {
+  const date = new Date(`${dateKey}T12:00:00+08:00`);
+  return new Intl.DateTimeFormat('en-PH', {
+    timeZone: STORE_TIME_ZONE,
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  }).format(date);
 }
 
 function isTodayOrder(order) {
-  const source = order.createdAt || `${order.date || ''} ${order.time || ''}`.trim();
-  const date = source ? new Date(source) : null;
-  if (!date || Number.isNaN(date.getTime())) return false;
-  const today = new Date();
-  return date.getFullYear() === today.getFullYear()
-    && date.getMonth() === today.getMonth()
-    && date.getDate() === today.getDate();
+  return getOrderDateKey(order) === getManilaDateKey(new Date());
 }
 
 function orderMatchesQuery(order, query) {
@@ -2899,6 +3081,7 @@ function showView(id, btn) {
     setMobileNavActive('orders');
   }
   if (id === 'reports') {
+    activeReportView = 'today';
     document.body.classList.remove('mobile-section-menu', 'mobile-section-cart', 'mobile-section-orders', 'mobile-section-admin');
     document.body.classList.add('mobile-section-reports');
     setMobileNavActive('reports');
