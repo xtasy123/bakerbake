@@ -43,6 +43,10 @@ insert into public.app_state (key, value)
 values ('order_counter', '1001'::jsonb)
 on conflict (key) do nothing;
 
+insert into public.app_state (key, value)
+values ('product_catalog', '[]'::jsonb)
+on conflict (key) do nothing;
+
 alter table public.orders enable row level security;
 alter table public.closeouts enable row level security;
 alter table public.app_state enable row level security;

@@ -1,9 +1,9 @@
-const { requireAuth } = require('./_lib/auth');
+const { requireRole } = require('./_lib/auth');
 const { readDb, writeDb, readJson, sendJson, sendError } = require('./_lib/supabase-storage');
 
 module.exports = async function handler(req, res) {
   try {
-    requireAuth(req);
+    requireRole(req, 'admin');
     const db = await readDb();
     if (req.method === 'GET') return sendJson(res, 200, { closeouts: db.closeouts || [] });
     if (req.method === 'POST') {

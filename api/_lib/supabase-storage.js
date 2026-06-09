@@ -43,7 +43,7 @@ async function supabaseFetch(table, options = {}) {
 }
 
 function defaultDb() {
-  return { cart: {}, orders: [], orderCounter: 1001, closeouts: [], updatedAt: null, storage: 'supabase' };
+  return { cart: {}, orders: [], orderCounter: 1001, closeouts: [], products: [], updatedAt: null, storage: 'supabase' };
 }
 
 function mapOrderFromSupabase(row) {
@@ -104,9 +104,10 @@ function mapCloseoutToSupabase(closeout) {
 }
 
 async function readDb() {
-  const [ordersRows, counterRows, closeoutRows] = await Promise.all([
+  const [ordersRows, counterRows, productRows, closeoutRows] = await Promise.all([
     supabaseFetch('orders', { query: '?select=*&order=id.desc' }),
     supabaseFetch('app_state', { query: '?key=eq.order_counter&select=value&limit=1' }),
+    supabaseFetch('app_state', { query: '?key=eq.product_catalog&select=value&limit=1' }),
     supabaseFetch('closeouts', { query: '?select=*&order=created_at.desc' })
   ]);
   const orders = (ordersRows || []).map(mapOrderFromSupabase);
@@ -116,6 +117,7 @@ async function readDb() {
     ...defaultDb(),
     orders,
     orderCounter: Number.isInteger(savedCounter) ? Math.max(savedCounter, nextCounter) : nextCounter,
+    products: Array.isArray(productRows?.[0]?.value) ? productRows[0].value : [],
     closeouts: (closeoutRows || []).map(mapCloseoutFromSupabase),
     updatedAt: new Date().toISOString()
   };
@@ -133,9 +135,22 @@ async function writeDb(db) {
     method: 'POST',
     query: '?on_conflict=key',
     prefer: 'resolution=merge-duplicates,return=representation',
-    body: [{ key: 'order_counter', value: next.orderCounter }]
+    body: [
+      { key: 'order_counter', value: next.orderCounter },
+      { key: 'product_catalog', value: Array.isArray(next.products) ? next.products : [] }
+    ]
   });
   return readDb();
+}
+
+async function writeProducts(products) {
+  await supabaseFetch('app_state', {
+    method: 'POST',
+    query: '?on_conflict=key',
+    prefer: 'resolution=merge-duplicates,return=representation',
+    body: [{ key: 'product_catalog', value: products }]
+  });
+  return products;
 }
 
 async function readJson(req) {
@@ -157,6 +172,7 @@ module.exports = {
   supabaseFetch,
   readDb,
   writeDb,
+  writeProducts,
   readJson,
   sendJson,
   sendError

@@ -30,7 +30,14 @@ npm start
 http://127.0.0.1:3000
 ```
 
-When Supabase env vars are present, the backend stores orders and closeouts in Supabase. Without them, it falls back to `data/db.json`.
+When Supabase env vars are present, the backend stores orders, closeouts, and the admin-managed product catalog in Supabase. Without them, it falls back to `data/db.json`.
+
+For an existing Supabase project, run the latest `supabase/schema.sql` again. It safely adds the `product_catalog` state key without deleting current orders.
+
+The role values in `POS_USERS_JSON` must be exactly:
+
+- `cashier`: Register and Orders access.
+- `admin`: Reports and Menu Management access.
 
 Security note: keep `SUPABASE_SERVICE_ROLE_KEY` private. It belongs only in `.env` on the backend machine, never in `index.html`.
 

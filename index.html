@@ -18,6 +18,7 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  [hidden] { display: none !important; }
 
   :root {
     --bg: #FAFAF8;
@@ -691,6 +692,95 @@
   .closeout-result strong { font-weight: 800; }
 
   /* ══════════════════════════════════════
+     VIEW: Admin
+  ══════════════════════════════════════ */
+  #view-admin {
+    padding: 24px;
+    flex-direction: column;
+    overflow-y: auto;
+    gap: 18px;
+  }
+  #view-admin h1 { font-size: 20px; font-weight: 600; }
+  .admin-layout {
+    display: grid;
+    grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+    gap: 18px;
+    align-items: start;
+  }
+  .admin-panel {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    padding: 16px;
+  }
+  .admin-panel h2 { font-size: 15px; margin-bottom: 14px; }
+  .admin-form { display: grid; gap: 11px; }
+  .admin-field label {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--text3);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  .admin-input {
+    width: 100%;
+    min-height: 42px;
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 9px 11px;
+    background: white;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    outline: none;
+  }
+  .admin-input:focus { border-color: var(--accent); }
+  .admin-price-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .admin-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .admin-actions { display: flex; gap: 8px; margin-top: 4px; }
+  .admin-actions button { min-height: 42px; flex: 1; }
+  .admin-products { display: grid; gap: 8px; }
+  .admin-product-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 10px;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+    padding: 10px 0;
+  }
+  .admin-product-row:last-child { border-bottom: 0; }
+  .admin-product-name { font-size: 14px; font-weight: 800; }
+  .admin-product-meta { color: var(--text3); font-size: 12px; margin-top: 2px; }
+  .admin-status {
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: #e8f7ed;
+    color: #14733a;
+    font-size: 11px;
+    font-weight: 800;
+  }
+  .admin-status.archived { background: #f1f0ed; color: var(--text3); }
+  .admin-row-actions { display: flex; gap: 6px; }
+  .admin-row-actions button {
+    min-height: 34px;
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    background: white;
+    padding: 6px 10px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  /* ══════════════════════════════════════
      MODAL: Payment
   ══════════════════════════════════════ */
   .modal-overlay {
@@ -1101,6 +1191,15 @@
     }
     .report-panel { padding: 14px; }
     .closeout-form { grid-template-columns: 1fr; }
+    #view-admin {
+      height: 100%;
+      padding: 16px 12px 24px;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .admin-layout { grid-template-columns: 1fr; }
+    .admin-product-row { grid-template-columns: minmax(0, 1fr) auto; }
+    .admin-row-actions { grid-column: 1 / -1; }
 
     .modal-overlay {
       align-items: stretch;
@@ -1172,11 +1271,12 @@
 <header class="topbar">
   <img src="logo.png" alt="BakerBake" class="topbar-logo">
   <nav class="topbar-nav">
-    <button class="nav-btn active" onclick="showView('pos', this)">Register</button>
-    <button class="nav-btn" onclick="showView('orders', this)">
+    <button class="nav-btn active" data-role-nav="cashier" onclick="showView('pos', this)">Register</button>
+    <button class="nav-btn" data-role-nav="cashier" onclick="showView('orders', this)">
       Orders <span id="pending-badge" class="badge" style="display:none">0</span>
     </button>
-    <button class="nav-btn" onclick="showView('reports', this)">Reports</button>
+    <button class="nav-btn" data-role-nav="admin" onclick="showView('reports', this)">Reports</button>
+    <button class="nav-btn" data-role-nav="admin" onclick="showView('admin', this)">Menu Management</button>
   </nav>
   <div class="topbar-right">
     <span class="cashier-label" id="cashier-label"></span>
@@ -1321,24 +1421,89 @@
     </div>
   </div>
 
+  <!-- ── VIEW: Admin ── -->
+  <div id="view-admin" class="view">
+    <h1>Menu Management</h1>
+    <div class="admin-layout">
+      <section class="admin-panel">
+        <h2 id="admin-form-title">Add Product</h2>
+        <form class="admin-form" onsubmit="saveAdminProduct(event)">
+          <input id="admin-product-id" type="hidden">
+          <div class="admin-field">
+            <label for="admin-product-name">Product Name</label>
+            <input class="admin-input" id="admin-product-name" type="text" required>
+          </div>
+          <div class="admin-price-grid">
+            <div class="admin-field">
+              <label for="admin-product-category">Category</label>
+              <select class="admin-input" id="admin-product-category" onchange="updateAdminPriceFields()">
+                <option value="HOT">Hot</option>
+                <option value="COLD">Cold</option>
+                <option value="PASTRY">Pastry</option>
+              </select>
+            </div>
+            <div class="admin-field">
+              <label for="admin-product-subgroup">Subgroup</label>
+              <input class="admin-input" id="admin-product-subgroup" type="text" placeholder="Cookies or Others">
+            </div>
+          </div>
+          <div class="admin-field">
+            <label for="admin-product-image">Image Path</label>
+            <input class="admin-input" id="admin-product-image" type="text" placeholder="images/product.jpg">
+          </div>
+          <div id="admin-beverage-prices" class="admin-price-grid">
+            <div class="admin-field">
+              <label for="admin-price-8oz">8oz Price</label>
+              <input class="admin-input" id="admin-price-8oz" type="number" min="0" step="1">
+            </div>
+            <div class="admin-field">
+              <label for="admin-price-12oz">12oz Price</label>
+              <input class="admin-input" id="admin-price-12oz" type="number" min="0" step="1">
+            </div>
+          </div>
+          <div id="admin-single-price" class="admin-field" style="display:none">
+            <label for="admin-product-price">Price</label>
+            <input class="admin-input" id="admin-product-price" type="number" min="0" step="1">
+          </div>
+          <label class="admin-check">
+            <input id="admin-product-active" type="checkbox" checked>
+            Available on cashier menu
+          </label>
+          <div class="admin-actions">
+            <button class="btn-cancel" type="button" onclick="resetAdminProductForm()">Clear</button>
+            <button class="btn-confirm" type="submit">Save Product</button>
+          </div>
+        </form>
+      </section>
+      <section class="admin-panel">
+        <h2>Products</h2>
+        <div class="admin-products" id="admin-products-list"></div>
+      </section>
+    </div>
+  </div>
+
 </main>
 
 <nav class="mobile-bottom-nav" aria-label="Primary mobile navigation">
-  <button class="mobile-nav-btn active" data-mobile-section="menu" onclick="showMobileSection('menu', this)">
+  <button class="mobile-nav-btn active" data-role-nav="cashier" data-mobile-section="menu" onclick="showMobileSection('menu', this)">
     <span class="nav-icon">☰</span>
     <span>Menu</span>
   </button>
-  <button class="mobile-nav-btn" data-mobile-section="cart" onclick="showMobileSection('cart', this)">
+  <button class="mobile-nav-btn" data-role-nav="cashier" data-mobile-section="cart" onclick="showMobileSection('cart', this)">
     <span class="nav-icon">🧾</span>
     <span>Cart <span id="mobile-cart-count" class="badge" style="display:none">0</span></span>
   </button>
-  <button class="mobile-nav-btn" data-mobile-section="orders" onclick="showMobileSection('orders', this)">
+  <button class="mobile-nav-btn" data-role-nav="cashier" data-mobile-section="orders" onclick="showMobileSection('orders', this)">
     <span class="nav-icon">✓</span>
     <span>Orders</span>
   </button>
-  <button class="mobile-nav-btn" data-mobile-section="reports" onclick="showMobileSection('reports', this)">
+  <button class="mobile-nav-btn" data-role-nav="admin" data-mobile-section="reports" onclick="showMobileSection('reports', this)">
     <span class="nav-icon">▦</span>
     <span>Reports</span>
+  </button>
+  <button class="mobile-nav-btn" data-role-nav="admin" data-mobile-section="admin" onclick="showMobileSection('admin', this)">
+    <span class="nav-icon">☰</span>
+    <span>Menu</span>
   </button>
 </nav>
 
@@ -1407,7 +1572,7 @@
 <div class="modal-overlay compact" id="logout-modal">
   <div class="modal">
     <h2>Log out?</h2>
-    <p class="modal-message">Are you sure you want to log out of this cashier account?</p>
+    <p class="modal-message">Are you sure you want to log out of this account?</p>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeLogoutConfirm()">Cancel</button>
       <button class="btn-confirm" onclick="confirmLogout()">Log Out</button>
@@ -1423,8 +1588,8 @@ const STORAGE_KEY = 'bakerbake-pos-state-v1';
 const SESSION_KEY = 'bakerbake-pos-session-v1';
 const BACKEND_ENABLED = location.protocol === 'http:' || location.protocol === 'https:';
 const CASHIERS = [
-  { username: 'cashier', password: '1234', name: 'Cashier' },
-  { username: 'admin', password: 'admin123', name: 'Admin' }
+  { username: 'cashier', password: '1234', name: 'Cashier', role: 'cashier' },
+  { username: 'admin', password: 'admin123', name: 'Admin', role: 'admin' }
 ];
 const PAYMENT_METHODS = [
   { id: 'cash', label: 'Cash', type: 'cash' },
@@ -1435,7 +1600,7 @@ const PAYMENT_METHODS = [
 
 // imageUrl: set to a file path or URL when you have photos, e.g. 'images/espresso.jpg'
 // Leave as null to keep the placeholder state.
-const PRODUCTS = [
+const DEFAULT_PRODUCTS = [
   { id:1,  name:'Espresso',                filter:'HOT',    subgroup:null,      imageUrl:'images/espresso.webp', variants:[{ id:'8oz', label:'8oz', price:70 }] },
   { id:2,  name:'Espresso Macchiato',      filter:'HOT',    subgroup:null,      imageUrl:'images/espresso-mach.avif', variants:[{ id:'8oz', label:'8oz', price:80 }] },
   { id:3,  name:'Americano',               filter:'HOT',    subgroup:null,      imageUrl:'images/americano.avif', variants:[{ id:'8oz', label:'8oz', price:90 }, { id:'12oz', label:'12oz', price:100 }] },
@@ -1459,6 +1624,7 @@ const PRODUCTS = [
 ];
 
 const FILTERS = ['ALL', 'HOT', 'COLD', 'PASTRY'];
+let products = DEFAULT_PRODUCTS.map(product => ({ ...product, active: product.active !== false }));
 let cart = {};
 let orders = [];
 let orderCounter = 1001;
@@ -1489,7 +1655,7 @@ function normalizeUsername(value) {
 }
 
 function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ cart, orders, orderCounter }));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ cart, orders, orderCounter, products }));
   scheduleBackendSave();
 }
 
@@ -1499,6 +1665,7 @@ function loadState() {
     if (saved.cart && typeof saved.cart === 'object') cart = saved.cart;
     if (Array.isArray(saved.orders)) orders = saved.orders;
     if (Number.isInteger(saved.orderCounter)) orderCounter = saved.orderCounter;
+    if (Array.isArray(saved.products) && saved.products.length) products = saved.products;
     migrateCart();
   } catch {
     cart = {};
@@ -1524,7 +1691,7 @@ async function apiRequest(path, options = {}) {
 }
 
 function getSerializableState() {
-  return { cart, orders, orderCounter, closeouts: [] };
+  return { cart, orders, orderCounter };
 }
 
 function scheduleBackendSave() {
@@ -1553,7 +1720,11 @@ async function syncFromBackend() {
     if (state.cart && typeof state.cart === 'object') cart = state.cart;
     if (Array.isArray(state.orders)) orders = state.orders;
     if (Number.isInteger(state.orderCounter)) orderCounter = state.orderCounter;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ cart, orders, orderCounter }));
+    if (Array.isArray(state.products) && state.products.length) products = state.products;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ cart, orders, orderCounter, products }));
+    buildFilters();
+    renderCatalog();
+    renderAdminProducts();
     renderCart();
     renderOrders();
     renderReports();
@@ -1569,7 +1740,7 @@ function migrateCart() {
   const migrated = {};
   Object.entries(cart).forEach(([key, item]) => {
     const productId = item.productId || item.id;
-    const product = PRODUCTS.find(p => p.id === productId);
+    const product = products.find(p => p.id === productId);
     if (!product) return;
 
     const variant = item.variantId && product.variants
@@ -1598,12 +1769,36 @@ function showWelcome(name) {
   setTimeout(() => overlay.classList.remove('show'), 1500);
 }
 
+function isCashier() {
+  return currentUser?.role === 'cashier';
+}
+
+function isAdmin() {
+  return currentUser?.role === 'admin';
+}
+
+function canAccessView(id) {
+  return isAdmin() ? ['reports', 'admin'].includes(id) : ['pos', 'orders'].includes(id);
+}
+
+function applyRoleUI() {
+  document.querySelectorAll('[data-role-nav]').forEach(element => {
+    element.hidden = element.dataset.roleNav !== currentUser?.role;
+  });
+  document.body.classList.toggle('admin-session', isAdmin());
+}
+
 function showAppForUser(user, showGreeting = false) {
-  currentUser = user;
-  document.getElementById('cashier-label').textContent = user.name;
+  currentUser = { ...user, role: user.role === 'admin' ? 'admin' : 'cashier' };
+  document.getElementById('cashier-label').textContent = currentUser.name;
   document.getElementById('login-screen').classList.add('hidden');
-  showMobileSection('menu');
-  if (showGreeting) showWelcome(user.name);
+  applyRoleUI();
+  if (isAdmin()) {
+    showView('reports');
+  } else {
+    showMobileSection('menu');
+  }
+  if (showGreeting) showWelcome(currentUser.name);
 }
 
 function showLogin() {
@@ -1643,7 +1838,7 @@ async function login(event) {
     return;
   }
 
-  const sessionUser = { username: user.username, name: user.name };
+  const sessionUser = { username: user.username, name: user.name, role: user.role };
   localStorage.setItem(SESSION_KEY, JSON.stringify({ user: sessionUser }));
   document.getElementById('login-error').textContent = '';
   showAppForUser(sessionUser, true);
@@ -1678,7 +1873,7 @@ async function restoreSession() {
     const savedUser = saved?.user || saved;
     const user = savedUser && CASHIERS.find(c => c.username === savedUser.username);
     if (!BACKEND_ENABLED && user) {
-      showAppForUser({ username: user.username, name: user.name });
+      showAppForUser({ username: user.username, name: user.name, role: user.role });
       return;
     }
   } catch {}
@@ -1713,7 +1908,7 @@ const IMG_PLACEHOLDER = `<svg viewBox="0 0 24 24" fill="none" stroke="currentCol
 
 function cardImgHTML(imageUrl) {
   if (imageUrl) {
-    return `<div class="card-img"><img src="${imageUrl}" alt="" loading="lazy"></div>`;
+    return `<div class="card-img"><img src="${escapeHTML(imageUrl)}" alt="" loading="lazy"></div>`;
   }
   return `<div class="card-img"><div class="card-img-placeholder">${IMG_PLACEHOLDER}</div></div>`;
 }
@@ -1733,7 +1928,7 @@ function productCardHTML(p) {
     : `${CURRENCY}${p.price.toLocaleString()}`;
   return `<div class="product-card ${qty > 0 ? 'has-items':''}" data-product-id="${p.id}" onclick="addToCart(${p.id})">
     ${cardImgHTML(p.imageUrl)}
-    <div class="name">${p.name}</div>
+    <div class="name">${escapeHTML(p.name)}</div>
     <div class="price">${priceText}</div>
     <div class="in-cart">${qty > 0 ? qty : ''}</div>
   </div>`;
@@ -1741,7 +1936,8 @@ function productCardHTML(p) {
 
 // ── Catalog ──
 function renderCatalog() {
-  const filtered = activeCategory === 'ALL' ? PRODUCTS : PRODUCTS.filter(p => p.filter === activeCategory);
+  const availableProducts = products.filter(product => product.active !== false);
+  const filtered = activeCategory === 'ALL' ? availableProducts : availableProducts.filter(p => p.filter === activeCategory);
   const grid = document.getElementById('catalog-grid');
 
   if (activeCategory === 'PASTRY') {
@@ -1749,12 +1945,155 @@ function renderCatalog() {
     const seen = {};
     filtered.forEach(p => { if (!seen[p.subgroup]) { seen[p.subgroup] = true; groups.push(p.subgroup); } });
     grid.innerHTML = groups.map(g =>
-      `<div class="subheader">${g}</div>` + filtered.filter(p => p.subgroup === g).map(productCardHTML).join('')
+      `<div class="subheader">${escapeHTML(g)}</div>` + filtered.filter(p => p.subgroup === g).map(productCardHTML).join('')
     ).join('');
   } else {
     grid.innerHTML = filtered.map(productCardHTML).join('');
   }
   bindImageFallbacks(grid);
+}
+
+function productPriceSummary(product) {
+  if (Array.isArray(product.variants)) {
+    return product.variants.map(variant => `${variant.label} ${formatMoney(variant.price)}`).join(' · ');
+  }
+  return formatMoney(product.price || 0);
+}
+
+function renderAdminProducts() {
+  const list = document.getElementById('admin-products-list');
+  if (!list) return;
+  const sorted = [...products].sort((a, b) => a.id - b.id);
+  list.innerHTML = sorted.length
+    ? sorted.map(product => `
+      <div class="admin-product-row">
+        <div>
+          <div class="admin-product-name">${escapeHTML(product.name)}</div>
+          <div class="admin-product-meta">${escapeHTML(product.filter)}${product.subgroup ? ` · ${escapeHTML(product.subgroup)}` : ''} · ${productPriceSummary(product)}</div>
+        </div>
+        <span class="admin-status ${product.active === false ? 'archived' : ''}">${product.active === false ? 'Archived' : 'Active'}</span>
+        <div class="admin-row-actions">
+          <button type="button" onclick="editAdminProduct(${product.id})">Edit</button>
+          <button type="button" onclick="toggleAdminProduct(${product.id})">${product.active === false ? 'Restore' : 'Archive'}</button>
+        </div>
+      </div>
+    `).join('')
+    : '<p class="report-empty">No products configured.</p>';
+}
+
+function updateAdminPriceFields() {
+  const isPastry = document.getElementById('admin-product-category')?.value === 'PASTRY';
+  document.getElementById('admin-beverage-prices').style.display = isPastry ? 'none' : 'grid';
+  document.getElementById('admin-single-price').style.display = isPastry ? '' : 'none';
+}
+
+function resetAdminProductForm() {
+  document.getElementById('admin-form-title').textContent = 'Add Product';
+  document.getElementById('admin-product-id').value = '';
+  document.getElementById('admin-product-name').value = '';
+  document.getElementById('admin-product-category').value = 'HOT';
+  document.getElementById('admin-product-subgroup').value = '';
+  document.getElementById('admin-product-image').value = '';
+  document.getElementById('admin-price-8oz').value = '';
+  document.getElementById('admin-price-12oz').value = '';
+  document.getElementById('admin-product-price').value = '';
+  document.getElementById('admin-product-active').checked = true;
+  updateAdminPriceFields();
+}
+
+function editAdminProduct(id) {
+  if (!isAdmin()) return;
+  const product = products.find(item => item.id === id);
+  if (!product) return;
+  document.getElementById('admin-form-title').textContent = 'Edit Product';
+  document.getElementById('admin-product-id').value = product.id;
+  document.getElementById('admin-product-name').value = product.name;
+  document.getElementById('admin-product-category').value = product.filter;
+  document.getElementById('admin-product-subgroup').value = product.subgroup || '';
+  document.getElementById('admin-product-image').value = product.imageUrl || '';
+  document.getElementById('admin-product-active').checked = product.active !== false;
+  document.getElementById('admin-product-price').value = product.price || '';
+  document.getElementById('admin-price-8oz').value = product.variants?.find(variant => variant.id === '8oz')?.price || '';
+  document.getElementById('admin-price-12oz').value = product.variants?.find(variant => variant.id === '12oz')?.price || '';
+  updateAdminPriceFields();
+  document.getElementById('view-admin').scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function persistProducts() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ cart, orders, orderCounter, products }));
+  if (BACKEND_ENABLED) {
+    const result = await apiRequest('/api/products', {
+      method: 'PUT',
+      body: JSON.stringify({ products })
+    });
+    if (Array.isArray(result.products)) products = result.products;
+  }
+  buildFilters();
+  renderCatalog();
+  renderAdminProducts();
+}
+
+async function saveAdminProduct(event) {
+  event.preventDefault();
+  if (!isAdmin()) return;
+  const existingId = Number(document.getElementById('admin-product-id').value);
+  const category = document.getElementById('admin-product-category').value;
+  const name = document.getElementById('admin-product-name').value.trim();
+  const active = document.getElementById('admin-product-active').checked;
+  const imageUrl = document.getElementById('admin-product-image').value.trim() || null;
+  const subgroupInput = document.getElementById('admin-product-subgroup').value.trim();
+  const nextId = existingId || products.reduce((max, product) => Math.max(max, Number(product.id) || 0), 0) + 1;
+  let product;
+
+  if (category === 'PASTRY') {
+    const price = Number(document.getElementById('admin-product-price').value);
+    if (!name || price <= 0) return showToast('Enter a product name and valid price');
+    product = {
+      id: nextId,
+      name,
+      filter: category,
+      subgroup: subgroupInput || 'Others',
+      imageUrl,
+      price,
+      active
+    };
+  } else {
+    const price8 = Number(document.getElementById('admin-price-8oz').value);
+    const price12 = Number(document.getElementById('admin-price-12oz').value);
+    const variants = [
+      ...(price8 > 0 ? [{ id: '8oz', label: '8oz', price: price8 }] : []),
+      ...(price12 > 0 ? [{ id: '12oz', label: '12oz', price: price12 }] : [])
+    ];
+    if (!name || !variants.length) return showToast('Enter a product name and at least one valid size price');
+    product = { id: nextId, name, filter: category, subgroup: null, imageUrl, variants, active };
+  }
+
+  const index = products.findIndex(item => item.id === nextId);
+  if (index === -1) products.push(product);
+  else products[index] = product;
+
+  try {
+    await persistProducts();
+    resetAdminProductForm();
+    showToast(`${name} saved`);
+  } catch (error) {
+    showToast(error.message || 'Could not save product');
+    await syncFromBackend();
+  }
+}
+
+async function toggleAdminProduct(id) {
+  if (!isAdmin()) return;
+  const product = products.find(item => item.id === id);
+  if (!product) return;
+  product.active = product.active === false;
+  try {
+    await persistProducts();
+    showToast(`${product.name} ${product.active ? 'restored' : 'archived'}`);
+  } catch (error) {
+    showToast(error.message || 'Could not update product');
+    await syncFromBackend();
+  }
 }
 
 function refreshCatalogBadges() {
@@ -1768,7 +2107,8 @@ function refreshCatalogBadges() {
 
 // ── Cart ──
 function addToCart(id) {
-  const p = PRODUCTS.find(x => x.id === id);
+  if (!isCashier()) return;
+  const p = products.find(x => x.id === id && x.active !== false);
   if (!p) return;
   if (p.variants) {
     openSizePicker(id);
@@ -1807,7 +2147,8 @@ function addLineItem(product, variant = null) {
 }
 
 function openSizePicker(productId) {
-  const p = PRODUCTS.find(x => x.id === productId);
+  if (!isCashier()) return;
+  const p = products.find(x => x.id === productId && x.active !== false);
   if (!p || !p.variants) return;
   pendingSizeProductId = productId;
   document.getElementById('size-product-name').textContent = p.name;
@@ -1826,7 +2167,8 @@ function closeSizePicker() {
 }
 
 function selectSize(variantId) {
-  const p = PRODUCTS.find(x => x.id === pendingSizeProductId);
+  if (!isCashier()) return;
+  const p = products.find(x => x.id === pendingSizeProductId && x.active !== false);
   const variant = p && p.variants ? p.variants.find(v => v.id === variantId) : null;
   if (!p || !variant) return;
   addLineItem(p, variant);
@@ -1923,6 +2265,7 @@ function formatMoney(value) {
 
 // ── Payment ──
 function openPayment() {
+  if (!isCashier()) return;
   const total = getTotal();
   const itemCount = Object.values(cart).reduce((s, i) => s + i.qty, 0);
   document.getElementById('pay-amount').textContent = `${CURRENCY}${total.toLocaleString()}`;
@@ -1976,6 +2319,7 @@ function updateChange() {
 }
 
 function confirmPayment() {
+  if (!isCashier()) return;
   const total = getTotal();
   const items = Object.values(cart).map(i => ({
     name: i.name,
@@ -2245,6 +2589,7 @@ function escapeHTML(value) {
 }
 
 function updateOrderCustomer(id, value) {
+  if (!isCashier()) return;
   const o = orders.find(x => x.id === id);
   if (!o) return;
   o.customerName = value.trim() || 'Walk-in';
@@ -2252,6 +2597,7 @@ function updateOrderCustomer(id, value) {
 }
 
 function completeOrder(id) {
+  if (!isCashier()) return;
   const o = orders.find(x => x.id === id);
   if (!o) return;
   o.status = 'done';
@@ -2267,6 +2613,7 @@ function completeOrder(id) {
 }
 
 function undoCompleteOrder(id) {
+  if (!isCashier()) return;
   const o = orders.find(x => x.id === id);
   if (!o) return;
   o.status = 'pending';
@@ -2287,8 +2634,11 @@ function updatePendingBadge() {
 
 // ── Navigation ──
 function showView(id, btn) {
+  if (currentUser && !canAccessView(id)) return;
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  document.getElementById('view-' + id).classList.add('active');
+  const view = document.getElementById('view-' + id);
+  if (!view) return;
+  view.classList.add('active');
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   if (btn) {
     btn.classList.add('active');
@@ -2309,9 +2659,16 @@ function showView(id, btn) {
     setMobileNavActive('orders');
   }
   if (id === 'reports') {
-    document.body.classList.remove('mobile-section-menu', 'mobile-section-cart', 'mobile-section-orders');
+    document.body.classList.remove('mobile-section-menu', 'mobile-section-cart', 'mobile-section-orders', 'mobile-section-admin');
     document.body.classList.add('mobile-section-reports');
     setMobileNavActive('reports');
+  }
+  if (id === 'admin') {
+    document.body.classList.remove('mobile-section-menu', 'mobile-section-cart', 'mobile-section-orders', 'mobile-section-reports');
+    document.body.classList.add('mobile-section-admin');
+    setMobileNavActive('admin');
+    renderAdminProducts();
+    updateAdminPriceFields();
   }
   if (id === 'orders') renderOrders();
   if (id === 'reports') renderReports();
@@ -2324,6 +2681,10 @@ function setMobileNavActive(section) {
 }
 
 function showMobileSection(section, btn) {
+  if (section === 'admin') {
+    showView('admin');
+    return;
+  }
   if (section === 'orders') {
     showView('orders');
     return;
@@ -2332,6 +2693,7 @@ function showMobileSection(section, btn) {
     showView('reports');
     return;
   }
+  if (!isCashier()) return;
 
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-pos').classList.add('active');
@@ -2375,6 +2737,8 @@ function showToast(msg, action = null) {
 loadState();
 buildFilters();
 renderCatalog();
+renderAdminProducts();
+resetAdminProductForm();
 renderCart();
 renderOrders();
 renderReports();

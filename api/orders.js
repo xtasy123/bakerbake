@@ -1,4 +1,4 @@
-const { requireAuth } = require('./_lib/auth');
+const { requireAuth, requireRole } = require('./_lib/auth');
 const { readDb, writeDb, readJson, sendJson, sendError } = require('./_lib/supabase-storage');
 
 module.exports = async function handler(req, res) {
@@ -7,6 +7,7 @@ module.exports = async function handler(req, res) {
     const db = await readDb();
     if (req.method === 'GET') return sendJson(res, 200, { orders: db.orders, orderCounter: db.orderCounter });
     if (req.method === 'POST') {
+      requireRole(req, 'cashier');
       const order = await readJson(req);
       const id = Number.isInteger(order.id) ? order.id : db.orderCounter;
       const savedOrder = { ...order, id };

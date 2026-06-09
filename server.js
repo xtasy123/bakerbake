@@ -142,12 +142,23 @@ function requireAuth(req) {
   return user;
 }
 
+function requireRole(req, role) {
+  const user = requireAuth(req);
+  if (user.role !== role) {
+    const error = new Error('Forbidden');
+    error.statusCode = 403;
+    throw error;
+  }
+  return user;
+}
+
 function defaultDb() {
   return {
     cart: {},
     orders: [],
     orderCounter: 1001,
     closeouts: [],
+    products: [],
     updatedAt: null
   };
 }
@@ -232,9 +243,10 @@ async function supabaseFetch(table, options = {}) {
 }
 
 async function readSupabaseDb() {
-  const [ordersRows, counterRows, closeoutRows] = await Promise.all([
+  const [ordersRows, counterRows, productRows, closeoutRows] = await Promise.all([
     supabaseFetch('orders', { query: '?select=*&order=id.desc' }),
     supabaseFetch('app_state', { query: '?key=eq.order_counter&select=value&limit=1' }),
+    supabaseFetch('app_state', { query: '?key=eq.product_catalog&select=value&limit=1' }),
     supabaseFetch('closeouts', { query: '?select=*&order=created_at.desc' })
   ]);
   const orders = (ordersRows || []).map(mapOrderFromSupabase);
@@ -244,6 +256,7 @@ async function readSupabaseDb() {
     cart: {},
     orders,
     orderCounter: Number.isInteger(savedCounter) ? Math.max(savedCounter, nextCounter) : nextCounter,
+    products: Array.isArray(productRows?.[0]?.value) ? productRows[0].value : [],
     closeouts: (closeoutRows || []).map(mapCloseoutFromSupabase),
     updatedAt: new Date().toISOString(),
     storage: 'supabase'
@@ -267,7 +280,10 @@ async function writeSupabaseDb(db) {
     method: 'POST',
     query: '?on_conflict=key',
     prefer: 'resolution=merge-duplicates,return=representation',
-    body: [{ key: 'order_counter', value: next.orderCounter }]
+    body: [
+      { key: 'order_counter', value: next.orderCounter },
+      { key: 'product_catalog', value: Array.isArray(next.products) ? next.products : [] }
+    ]
   });
   return readSupabaseDb();
 }
@@ -302,6 +318,22 @@ async function writeDb(db) {
   };
   await fs.writeFile(DB_PATH, JSON.stringify(payload, null, 2));
   return payload;
+}
+
+async function writeProducts(products) {
+  if (USE_SUPABASE) {
+    await supabaseFetch('app_state', {
+      method: 'POST',
+      query: '?on_conflict=key',
+      prefer: 'resolution=merge-duplicates,return=representation',
+      body: [{ key: 'product_catalog', value: products }]
+    });
+    return products;
+  }
+  const db = await readDb();
+  db.products = products;
+  const saved = await writeDb(db);
+  return saved.products;
 }
 
 async function readJson(req) {
@@ -387,21 +419,28 @@ async function handleApi(req, res, url) {
     return;
   }
 
-  requireAuth(req);
+  const authenticatedUser = requireAuth(req);
 
   if (req.method === 'GET' && url.pathname === '/api/state') {
-    sendJson(res, 200, await readDb());
+    const db = await readDb();
+    sendJson(res, 200, authenticatedUser.role === 'admin'
+      ? { ...db, cart: {} }
+      : { cart: db.cart, orders: db.orders, orderCounter: db.orderCounter, products: db.products, updatedAt: db.updatedAt, storage: db.storage });
     return;
   }
 
   if (req.method === 'PUT' && url.pathname === '/api/state') {
+    if (authenticatedUser.role !== 'cashier') {
+      sendJson(res, 403, { error: 'Forbidden' });
+      return;
+    }
     const body = await readJson(req);
+    const currentDb = await readDb();
     const nextDb = {
-      ...(await readDb()),
+      ...currentDb,
       cart: body.cart && typeof body.cart === 'object' ? body.cart : {},
       orders: Array.isArray(body.orders) ? body.orders : [],
-      orderCounter: Number.isInteger(body.orderCounter) ? body.orderCounter : 1001,
-      closeouts: Array.isArray(body.closeouts) ? body.closeouts : []
+      orderCounter: Number.isInteger(body.orderCounter) ? body.orderCounter : currentDb.orderCounter
     };
     sendJson(res, 200, await writeDb(nextDb));
     return;
@@ -414,6 +453,7 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/orders') {
+    requireRole(req, 'cashier');
     const order = await readJson(req);
     const db = await readDb();
     const id = Number.isInteger(order.id) ? order.id : db.orderCounter;
@@ -427,6 +467,7 @@ async function handleApi(req, res, url) {
 
   const orderMatch = url.pathname.match(/^\/api\/orders\/(\d+)$/);
   if (orderMatch && req.method === 'PATCH') {
+    requireRole(req, 'cashier');
     const id = Number(orderMatch[1]);
     const patch = await readJson(req);
     const db = await readDb();
@@ -442,12 +483,14 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === 'GET' && url.pathname === '/api/closeouts') {
+    requireRole(req, 'admin');
     const db = await readDb();
     sendJson(res, 200, { closeouts: db.closeouts || [] });
     return;
   }
 
   if (req.method === 'POST' && url.pathname === '/api/closeouts') {
+    requireRole(req, 'admin');
     const closeout = await readJson(req);
     const db = await readDb();
     const saved = {
@@ -458,6 +501,24 @@ async function handleApi(req, res, url) {
     db.closeouts = [saved, ...(db.closeouts || [])];
     await writeDb(db);
     sendJson(res, 201, { closeout: saved });
+    return;
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/products') {
+    const db = await readDb();
+    sendJson(res, 200, { products: db.products || [] });
+    return;
+  }
+
+  if (req.method === 'PUT' && url.pathname === '/api/products') {
+    requireRole(req, 'admin');
+    const body = await readJson(req);
+    if (!Array.isArray(body.products)) {
+      sendJson(res, 400, { error: 'Products must be an array.' });
+      return;
+    }
+    const products = await writeProducts(body.products);
+    sendJson(res, 200, { products });
     return;
   }
 

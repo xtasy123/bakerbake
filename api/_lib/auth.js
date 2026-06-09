@@ -84,6 +84,16 @@ function requireAuth(req) {
   return user;
 }
 
+function requireRole(req, role) {
+  const user = requireAuth(req);
+  if (user.role !== role) {
+    const error = new Error('Forbidden');
+    error.statusCode = 403;
+    throw error;
+  }
+  return user;
+}
+
 function authenticate(username, password) {
   const users = getUsers();
   if (!SESSION_SECRET || !users.length) {
@@ -109,6 +119,7 @@ module.exports = {
   createToken,
   publicUser,
   requireAuth,
+  requireRole,
   verifyToken,
   getUsers,
   SESSION_SECRET
