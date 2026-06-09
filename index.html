@@ -768,6 +768,40 @@
   .admin-upload-status { min-height: 18px; color: var(--text3); font-size: 12px; margin-top: 5px; }
   .admin-actions { display: flex; gap: 8px; margin-top: 4px; }
   .admin-actions button { min-height: 42px; flex: 1; }
+  .admin-list-toolbar { display: grid; gap: 10px; margin-bottom: 12px; }
+  .admin-list-controls {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) minmax(160px, 210px);
+    gap: 8px;
+  }
+  .admin-category-filters {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+  .admin-category-filters::-webkit-scrollbar { display: none; }
+  .admin-category-filter {
+    flex: 0 0 auto;
+    min-height: 34px;
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    background: white;
+    color: var(--text2);
+    padding: 7px 10px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .admin-category-filter.active {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: white;
+  }
+  .admin-filter-count { margin-left: 4px; opacity: 0.72; }
+  .admin-list-result { color: var(--text3); font-size: 12px; }
   .admin-products { display: grid; gap: 8px; }
   .admin-product-row {
     display: grid;
@@ -1220,6 +1254,7 @@
       -webkit-overflow-scrolling: touch;
     }
     .admin-layout { grid-template-columns: 1fr; }
+    .admin-list-controls { grid-template-columns: 1fr; }
     .admin-product-row { grid-template-columns: minmax(0, 1fr) auto; }
     .admin-row-actions { grid-column: 1 / -1; }
 
@@ -1506,6 +1541,19 @@
       </section>
       <section class="admin-panel">
         <h2>Products</h2>
+        <div class="admin-list-toolbar">
+          <div class="admin-list-controls">
+            <input class="admin-input" id="admin-product-search" type="search" placeholder="Search products" autocomplete="off" oninput="setAdminProductSearch(this.value)">
+            <select class="admin-input" id="admin-product-sort" onchange="setAdminProductSort(this.value)" aria-label="Sort products">
+              <option value="default">Default order</option>
+              <option value="price-asc">Price: Low to High</option>
+              <option value="price-desc">Price: High to Low</option>
+              <option value="name-asc">Name: A to Z</option>
+            </select>
+          </div>
+          <div class="admin-category-filters" id="admin-category-filters" aria-label="Filter products by category"></div>
+          <div class="admin-list-result" id="admin-list-result"></div>
+        </div>
         <div class="admin-products" id="admin-products-list"></div>
       </section>
     </div>
@@ -1659,6 +1707,9 @@ let orders = [];
 let orderCounter = 1001;
 let activeCategory = 'ALL';
 let activeOrderFilter = 'pending';
+let activeAdminProductFilter = 'ALL';
+let activeAdminProductSort = 'default';
+let adminProductSearch = '';
 let payMethod = 'cash';
 let currentUser = null;
 let pendingSizeProductId = null;
@@ -1989,10 +2040,76 @@ function productPriceSummary(product) {
   return formatMoney(product.price || 0);
 }
 
+function getAdminProductPrice(product) {
+  if (Array.isArray(product.variants) && product.variants.length) {
+    return Math.min(...product.variants.map(variant => Number(variant.price) || 0));
+  }
+  return Number(product.price) || 0;
+}
+
+function renderAdminCategoryFilters() {
+  const container = document.getElementById('admin-category-filters');
+  if (!container) return;
+  const filters = [
+    { id: 'ALL', label: 'All', count: products.filter(product => product.active !== false).length },
+    { id: 'HOT', label: 'Hot', count: products.filter(product => product.active !== false && product.filter === 'HOT').length },
+    { id: 'COLD', label: 'Cold', count: products.filter(product => product.active !== false && product.filter === 'COLD').length },
+    { id: 'PASTRY', label: 'Pastry', count: products.filter(product => product.active !== false && product.filter === 'PASTRY').length },
+    { id: 'ARCHIVED', label: 'Archived', count: products.filter(product => product.active === false).length }
+  ];
+  container.innerHTML = filters.map(filter => `
+    <button class="admin-category-filter ${filter.id === activeAdminProductFilter ? 'active' : ''}" type="button" onclick="setAdminProductFilter('${filter.id}')">
+      ${filter.label}<span class="admin-filter-count">${filter.count}</span>
+    </button>
+  `).join('');
+}
+
+function setAdminProductFilter(filter) {
+  activeAdminProductFilter = filter;
+  renderAdminProducts();
+}
+
+function setAdminProductSort(sort) {
+  activeAdminProductSort = sort;
+  renderAdminProducts();
+}
+
+function setAdminProductSearch(value) {
+  adminProductSearch = value.trim().toLowerCase();
+  renderAdminProducts();
+}
+
 function renderAdminProducts() {
   const list = document.getElementById('admin-products-list');
   if (!list) return;
-  const sorted = [...products].sort((a, b) => a.id - b.id);
+  renderAdminCategoryFilters();
+  const searchInput = document.getElementById('admin-product-search');
+  const sortInput = document.getElementById('admin-product-sort');
+  if (searchInput && searchInput.value !== adminProductSearch) searchInput.value = adminProductSearch;
+  if (sortInput && sortInput.value !== activeAdminProductSort) sortInput.value = activeAdminProductSort;
+
+  const filtered = products.filter(product => {
+    const categoryMatches = activeAdminProductFilter === 'ARCHIVED'
+      ? product.active === false
+      : product.active !== false && (activeAdminProductFilter === 'ALL' || product.filter === activeAdminProductFilter);
+    const searchMatches = !adminProductSearch ||
+      product.name.toLowerCase().includes(adminProductSearch) ||
+      String(product.subgroup || '').toLowerCase().includes(adminProductSearch);
+    return categoryMatches && searchMatches;
+  });
+
+  const sorted = [...filtered].sort((a, b) => {
+    if (activeAdminProductSort === 'price-asc') return getAdminProductPrice(a) - getAdminProductPrice(b) || a.name.localeCompare(b.name);
+    if (activeAdminProductSort === 'price-desc') return getAdminProductPrice(b) - getAdminProductPrice(a) || a.name.localeCompare(b.name);
+    if (activeAdminProductSort === 'name-asc') return a.name.localeCompare(b.name);
+    return a.id - b.id;
+  });
+
+  const result = document.getElementById('admin-list-result');
+  if (result) {
+    const label = sorted.length === 1 ? 'product' : 'products';
+    result.textContent = `${sorted.length} ${label}`;
+  }
   list.innerHTML = sorted.length
     ? sorted.map(product => `
       <div class="admin-product-row">
@@ -2007,7 +2124,7 @@ function renderAdminProducts() {
         </div>
       </div>
     `).join('')
-    : '<p class="report-empty">No products configured.</p>';
+    : `<p class="report-empty">${adminProductSearch ? 'No matching products.' : 'No products in this filter.'}</p>`;
 }
 
 function updateAdminPriceFields() {
@@ -2195,6 +2312,7 @@ async function saveAdminProduct(event) {
   else products[index] = product;
 
   try {
+    if (!existingId) activeAdminProductFilter = active ? category : 'ARCHIVED';
     await persistProducts();
     resetAdminProductForm();
     showToast(`${name} saved`);
