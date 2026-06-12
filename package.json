@@ -5,7 +5,8 @@
   "description": "BakerBake POS PWA with a lightweight local backend",
   "scripts": {
     "start": "node server.js",
-    "hash-password": "node scripts/hash-password.js"
+    "hash-password": "node scripts/hash-password.js",
+    "test": "node scripts/reliability-checks.js"
   },
   "engines": {
     "node": ">=18"

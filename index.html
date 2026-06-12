@@ -91,6 +91,25 @@
   .nav-btn:hover { background: var(--surface2); color: var(--text); }
   .nav-btn.active { background: var(--accent-light); color: var(--text); }
   .topbar-right { display: flex; align-items: center; gap: 12px; }
+  .sync-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text2);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .sync-status::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #8c8c87;
+  }
+  .sync-status[data-state="syncing"]::before { background: #d58a16; }
+  .sync-status[data-state="saved"]::before { background: #23884f; }
+  .sync-status[data-state="offline"]::before,
+  .sync-status[data-state="error"]::before { background: #c43d3d; }
   .clock { font-size: 13px; color: var(--text2); font-weight: 500; }
   .badge {
     background: var(--accent);
@@ -1221,6 +1240,8 @@
     .topbar-logo { height: 42px; max-width: 138px; }
     .topbar-nav { display: none; }
     .topbar-right { gap: 8px; margin-left: auto; }
+    .sync-status { width: 8px; height: 8px; gap: 0; overflow: hidden; font-size: 0; flex: 0 0 8px; }
+    .sync-status::before { width: 8px; height: 8px; flex: 0 0 8px; }
     .cashier-label {
       max-width: 74px;
       overflow: hidden;
@@ -1465,6 +1486,7 @@
     <button class="nav-btn" data-role-nav="admin" onclick="showView('admin', this)">Menu Management</button>
   </nav>
   <div class="topbar-right">
+    <span class="sync-status" id="sync-status" data-state="local">Local</span>
     <span class="cashier-label" id="cashier-label"></span>
     <button class="logout-btn" onclick="openLogoutConfirm()">Logout</button>
     <span class="clock" id="clock">--:--</span>
@@ -1858,6 +1880,7 @@
 const CURRENCY = '₱';
 const STORE_TIME_ZONE = 'Asia/Manila';
 const STORAGE_KEY = 'bakerbake-pos-state-v1';
+const CART_STORAGE_KEY = 'bakerbake-pos-cart-v1';
 const SESSION_KEY = 'bakerbake-pos-session-v1';
 const BACKEND_ENABLED = location.protocol === 'http:' || location.protocol === 'https:';
 const CASHIERS = [
@@ -1913,8 +1936,8 @@ let pendingSizeProductId = null;
 let pendingUndoTimer = null;
 let pendingUndoOrderId = null;
 let pendingVoidOrderId = null;
-let backendSaveTimer = null;
-let isApplyingBackendState = false;
+let paymentSubmissionInProgress = false;
+let activePaymentRequestId = null;
 
 function getSession() {
   try {
@@ -1933,18 +1956,21 @@ function normalizeUsername(value) {
 }
 
 function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ cart, orders, orderCounter, products }));
-  scheduleBackendSave();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ orders, orderCounter, products }));
+  localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
 }
 
 function loadState() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-    if (saved.cart && typeof saved.cart === 'object') cart = saved.cart;
+    const savedCart = JSON.parse(localStorage.getItem(CART_STORAGE_KEY) || 'null');
+    if (savedCart && typeof savedCart === 'object') cart = savedCart;
+    else if (saved.cart && typeof saved.cart === 'object') cart = saved.cart;
     if (Array.isArray(saved.orders)) orders = saved.orders;
     if (Number.isInteger(saved.orderCounter)) orderCounter = saved.orderCounter;
     if (Array.isArray(saved.products) && saved.products.length) products = saved.products;
     migrateCart();
+    saveState();
   } catch {
     cart = {};
     orders = [];
@@ -1964,42 +1990,33 @@ async function apiRequest(path, options = {}) {
     }
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || `Request failed: ${response.status}`);
+  if (!response.ok) {
+    const error = new Error(data.error || `Request failed: ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
   return data;
 }
 
-function getSerializableState() {
-  return { cart, orders, orderCounter };
-}
-
-function scheduleBackendSave() {
-  if (!BACKEND_ENABLED || isApplyingBackendState) return;
-  if (backendSaveTimer) clearTimeout(backendSaveTimer);
-  backendSaveTimer = setTimeout(pushStateToBackend, 250);
-}
-
-async function pushStateToBackend() {
-  if (!BACKEND_ENABLED) return;
-  try {
-    await apiRequest('/api/state', {
-      method: 'PUT',
-      body: JSON.stringify(getSerializableState())
-    });
-  } catch (error) {
-    console.warn('Backend save failed:', error.message);
-  }
+function setSyncStatus(state, label) {
+  const status = document.getElementById('sync-status');
+  if (!status) return;
+  status.dataset.state = state;
+  status.textContent = label;
 }
 
 async function syncFromBackend() {
-  if (!BACKEND_ENABLED) return;
+  if (!BACKEND_ENABLED) {
+    setSyncStatus('local', 'Local');
+    return;
+  }
+  setSyncStatus('syncing', 'Syncing');
   try {
     const state = await apiRequest('/api/state');
-    isApplyingBackendState = true;
-    if (state.cart && typeof state.cart === 'object') cart = state.cart;
     if (Array.isArray(state.orders)) orders = state.orders;
     if (Number.isInteger(state.orderCounter)) orderCounter = state.orderCounter;
     if (Array.isArray(state.products) && state.products.length) products = state.products;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ cart, orders, orderCounter, products }));
+    saveState();
     buildFilters();
     renderCatalog();
     renderAdminProducts();
@@ -2009,10 +2026,33 @@ async function syncFromBackend() {
     updatePendingBadge();
     updateVoidRequestBadge();
     if (isAdmin()) renderVoidRequests();
+    setSyncStatus('saved', 'Synced');
   } catch (error) {
     console.warn('Backend sync failed:', error.message);
-  } finally {
-    isApplyingBackendState = false;
+    setSyncStatus(navigator.onLine ? 'error' : 'offline', navigator.onLine ? 'Sync error' : 'Offline');
+  }
+}
+
+async function patchOrder(order, patch) {
+  if (!BACKEND_ENABLED) {
+    Object.assign(order, patch);
+    saveState();
+    return order;
+  }
+  setSyncStatus('syncing', 'Saving');
+  try {
+    const result = await apiRequest(`/api/orders/${order.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ ...patch, expectedUpdatedAt: order.updatedAt || null })
+    });
+    Object.assign(order, result.order);
+    saveState();
+    setSyncStatus('saved', 'Synced');
+    return order;
+  } catch (error) {
+    setSyncStatus(navigator.onLine ? 'error' : 'offline', navigator.onLine ? 'Sync error' : 'Offline');
+    if (error.status === 409) await syncFromBackend();
+    throw error;
   }
 }
 
@@ -2462,13 +2502,16 @@ function editAdminProduct(id) {
 }
 
 async function persistProducts() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ cart, orders, orderCounter, products }));
+  saveState();
   if (BACKEND_ENABLED) {
+    setSyncStatus('syncing', 'Saving');
     const result = await apiRequest('/api/products', {
       method: 'PUT',
       body: JSON.stringify({ products })
     });
     if (Array.isArray(result.products)) products = result.products;
+    saveState();
+    setSyncStatus('saved', 'Synced');
   }
   buildFilters();
   renderCatalog();
@@ -2726,6 +2769,7 @@ function openPayment() {
   ).join('');
 
   payMethod = 'cash';
+  activePaymentRequestId = createRequestId();
   document.getElementById('cash-section').style.display = '';
   document.getElementById('reference-section').style.display = 'none';
   document.querySelectorAll('.pay-method').forEach((b,i) => b.classList.toggle('selected', i===0));
@@ -2734,7 +2778,14 @@ function openPayment() {
 }
 
 function closePayment() {
+  if (paymentSubmissionInProgress) return;
+  activePaymentRequestId = null;
   document.getElementById('payment-modal').classList.remove('open');
+}
+
+function createRequestId() {
+  if (globalThis.crypto?.randomUUID) return crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 function selectMethod(m, btn) {
@@ -2758,11 +2809,12 @@ function updateChange() {
   const change = Math.max(0, tendered - total);
   document.getElementById('change-val').textContent = `${CURRENCY}${change.toLocaleString()}`;
   const method = PAYMENT_METHODS.find(x => x.id === payMethod) || PAYMENT_METHODS[0];
-  document.getElementById('confirm-btn').disabled = method.type === 'cash' && tendered < total;
+  document.getElementById('confirm-btn').disabled = paymentSubmissionInProgress
+    || (method.type === 'cash' && tendered < total);
 }
 
-function confirmPayment() {
-  if (!isCashier()) return;
+async function confirmPayment() {
+  if (!isCashier() || paymentSubmissionInProgress) return;
   const total = getTotal();
   const items = Object.values(cart).map(i => ({
     name: i.name,
@@ -2785,8 +2837,9 @@ function confirmPayment() {
     change: method.type === 'cash' ? Math.max(0, tendered - total) : null
   };
 
-  const order = {
-    id: orderCounter++,
+  const pendingOrder = {
+    id: orderCounter,
+    requestId: activePaymentRequestId || createRequestId(),
     items,
     total,
     customerName,
@@ -2798,16 +2851,46 @@ function confirmPayment() {
     payment,
     method: method.id
   };
-  orders.unshift(order);
-  saveState();
-
-  closePayment();
-  clearCart();
-  renderOrders();
-  renderReports();
-  updatePendingBadge();
-  showMobileSection('orders');
-  showToast(`Order #${order.id} placed ✓`);
+  const button = document.getElementById('confirm-btn');
+  paymentSubmissionInProgress = true;
+  button.disabled = true;
+  button.textContent = 'Processing...';
+  setSyncStatus(BACKEND_ENABLED ? 'syncing' : 'local', BACKEND_ENABLED ? 'Saving' : 'Local');
+  try {
+    let savedOrder = pendingOrder;
+    let nextCounter = pendingOrder.id + 1;
+    if (BACKEND_ENABLED) {
+      const result = await apiRequest('/api/orders', {
+        method: 'POST',
+        body: JSON.stringify(pendingOrder)
+      });
+      savedOrder = result.order;
+      nextCounter = result.orderCounter;
+    }
+    if (!orders.some(order => order.requestId && order.requestId === savedOrder.requestId)) {
+      orders.unshift(savedOrder);
+    }
+    orderCounter = Math.max(orderCounter, nextCounter || savedOrder.id + 1);
+    saveState();
+    paymentSubmissionInProgress = false;
+    activePaymentRequestId = null;
+    document.getElementById('payment-modal').classList.remove('open');
+    clearCart();
+    renderOrders();
+    renderReports();
+    updatePendingBadge();
+    showMobileSection('orders');
+    setSyncStatus(BACKEND_ENABLED ? 'saved' : 'local', BACKEND_ENABLED ? 'Synced' : 'Local');
+    showToast(`Order #${savedOrder.id} placed ✓`);
+  } catch (error) {
+    setSyncStatus(navigator.onLine ? 'error' : 'offline', navigator.onLine ? 'Sync error' : 'Offline');
+    if (error.status === 409) await syncFromBackend();
+    showToast(error.message || 'Payment could not be saved. The cart was kept.');
+  } finally {
+    paymentSubmissionInProgress = false;
+    button.textContent = 'Confirm Payment';
+    updateChange();
+  }
 }
 
 // ── Orders ──
@@ -3226,43 +3309,54 @@ function escapeHTML(value) {
     .replaceAll('>', '&gt;');
 }
 
-function updateOrderCustomer(id, value) {
+async function updateOrderCustomer(id, value) {
   if (!isCashier()) return;
   const o = orders.find(x => x.id === id);
   if (!o) return;
-  o.customerName = value.trim() || 'Walk-in';
-  saveState();
+  try {
+    await patchOrder(o, { customerName: value.trim() || 'Walk-in' });
+  } catch (error) {
+    showToast(error.message || 'Customer name could not be saved.');
+    renderOrders();
+  }
 }
 
-function completeOrder(id) {
+async function completeOrder(id) {
   if (!isCashier()) return;
   const o = orders.find(x => x.id === id);
   if (!o || o.status !== 'pending') return;
-  o.status = 'done';
-  o.completedAt = new Date().toISOString();
-  saveState();
-  renderOrders();
-  renderReports();
-  updatePendingBadge();
-  showToast(`Order #${o.id} completed`, {
-    label: 'Undo',
-    onClick: () => undoCompleteOrder(id)
-  });
+  try {
+    await patchOrder(o, { status: 'done', completedAt: new Date().toISOString() });
+    renderOrders();
+    renderReports();
+    updatePendingBadge();
+    showToast(`Order #${o.id} completed`, {
+      label: 'Undo',
+      onClick: () => undoCompleteOrder(id)
+    });
+  } catch (error) {
+    showToast(error.message || 'Order could not be completed.');
+  }
 }
 
-function undoCompleteOrder(id) {
+async function undoCompleteOrder(id) {
   if (!isCashier()) return;
   const o = orders.find(x => x.id === id);
   if (!o || o.status !== 'done') return;
-  o.previouslyCompleted = true;
-  o.lastCompletedAt = o.completedAt || new Date().toISOString();
-  o.status = 'pending';
-  delete o.completedAt;
-  saveState();
-  renderOrders();
-  renderReports();
-  updatePendingBadge();
-  showToast(`Order #${o.id} moved back to pending`);
+  try {
+    await patchOrder(o, {
+      previouslyCompleted: true,
+      lastCompletedAt: o.completedAt || new Date().toISOString(),
+      status: 'pending',
+      completedAt: null
+    });
+    renderOrders();
+    renderReports();
+    updatePendingBadge();
+    showToast(`Order #${o.id} moved back to pending`);
+  } catch (error) {
+    showToast(error.message || 'Order could not be moved back to pending.');
+  }
 }
 
 function openVoidModal(id) {
@@ -3301,6 +3395,16 @@ async function requestCompletedVoid(order, reason) {
     });
     return result.order;
   }
+  if (order.status !== 'done' && order.previouslyCompleted !== true) {
+    return {
+      ...order,
+      previousStatus: order.status,
+      status: 'voided',
+      voidReason: reason,
+      voidedAt: new Date().toISOString(),
+      voidedBy: currentUser.name || currentUser.username
+    };
+  }
   return {
     ...order,
     voidRequest: {
@@ -3331,16 +3435,10 @@ async function confirmVoidOrder() {
   error.textContent = '';
   try {
     const needsApproval = order.status === 'done' || order.previouslyCompleted === true;
-    if (needsApproval) {
-      Object.assign(order, await requestCompletedVoid(order, reason));
-    } else {
-      order.previousStatus = order.status;
-      order.status = 'voided';
-      order.voidReason = reason;
-      order.voidedAt = new Date().toISOString();
-      order.voidedBy = currentUser.name || currentUser.username;
-    }
+    setSyncStatus(BACKEND_ENABLED ? 'syncing' : 'local', BACKEND_ENABLED ? 'Saving' : 'Local');
+    Object.assign(order, await requestCompletedVoid(order, reason));
     saveState();
+    setSyncStatus(BACKEND_ENABLED ? 'saved' : 'local', BACKEND_ENABLED ? 'Synced' : 'Local');
     closeVoidModal();
     renderOrders();
     renderReports();
@@ -3348,6 +3446,7 @@ async function confirmVoidOrder() {
     updateVoidRequestBadge();
     showToast(needsApproval ? `Void request sent for order #${order.id}` : `Order #${order.id} voided`);
   } catch (authorizationError) {
+    setSyncStatus(navigator.onLine ? 'error' : 'offline', navigator.onLine ? 'Sync error' : 'Offline');
     error.textContent = authorizationError.message || 'Unable to authorize this void.';
   } finally {
     button.disabled = false;
@@ -3448,11 +3547,13 @@ async function reviewVoidRequest(orderId, decision) {
       };
     }
     Object.assign(order, updatedOrder);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ cart, orders, orderCounter, products }));
+    saveState();
+    setSyncStatus(BACKEND_ENABLED ? 'saved' : 'local', BACKEND_ENABLED ? 'Synced' : 'Local');
     renderVoidRequests();
     renderReports();
     showToast(`Void request for order #${orderId} ${decision === 'approve' ? 'approved' : 'rejected'}`);
   } catch (error) {
+    setSyncStatus(navigator.onLine ? 'error' : 'offline', navigator.onLine ? 'Sync error' : 'Offline');
     showToast(error.message || 'Unable to review void request.');
   }
 }
@@ -3601,8 +3702,20 @@ updateVoidRequestBadge();
 restoreSession();
 
 setInterval(() => {
-  if (currentUser && BACKEND_ENABLED) syncFromBackend();
+  if (currentUser && BACKEND_ENABLED) {
+    syncFromBackend();
+  }
 }, 15000);
+
+window.addEventListener('online', () => {
+  setSyncStatus('syncing', 'Reconnecting');
+  if (currentUser && BACKEND_ENABLED) syncFromBackend();
+});
+window.addEventListener('offline', () => setSyncStatus('offline', 'Offline'));
+setSyncStatus(
+  BACKEND_ENABLED && !navigator.onLine ? 'offline' : 'local',
+  BACKEND_ENABLED && !navigator.onLine ? 'Offline' : 'Local'
+);
 
 // Close modal on overlay click
 document.getElementById('payment-modal').addEventListener('click', function(e) {

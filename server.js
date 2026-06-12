@@ -165,7 +165,7 @@ function defaultDb() {
 }
 
 function mapOrderFromSupabase(row) {
-  return row.payload || {
+  const order = row.payload || {
     id: row.id,
     items: row.items || [],
     total: Number(row.total || 0),
@@ -177,6 +177,7 @@ function mapOrderFromSupabase(row) {
     payment: row.payment || null,
     method: row.payment_method || 'cash'
   };
+  return { ...order, updatedAt: row.updated_at || order.updatedAt || null };
 }
 
 function mapOrderToSupabase(order) {
@@ -329,15 +330,21 @@ async function readSupabaseDb() {
 async function writeSupabaseDb(db) {
   const next = { ...defaultDb(), ...db };
   const ordersPayload = next.orders.map(mapOrderToSupabase);
-  await Promise.all([
-    supabaseFetch('orders', { method: 'DELETE', query: '?id=gte.0', prefer: 'return=minimal' }),
-    supabaseFetch('closeouts', { method: 'DELETE', query: '?id=gte.0', prefer: 'return=minimal' })
-  ]);
   if (ordersPayload.length) {
-    await supabaseFetch('orders', { method: 'POST', body: ordersPayload });
+    await supabaseFetch('orders', {
+      method: 'POST',
+      query: '?on_conflict=id',
+      prefer: 'resolution=merge-duplicates,return=minimal',
+      body: ordersPayload
+    });
   }
   if (next.closeouts.length) {
-    await supabaseFetch('closeouts', { method: 'POST', body: next.closeouts.map(mapCloseoutToSupabase) });
+    await supabaseFetch('closeouts', {
+      method: 'POST',
+      query: '?on_conflict=id',
+      prefer: 'resolution=merge-duplicates,return=minimal',
+      body: next.closeouts.map(mapCloseoutToSupabase)
+    });
   }
   await supabaseFetch('app_state', {
     method: 'POST',
@@ -381,6 +388,58 @@ async function writeDb(db) {
   };
   await fs.writeFile(DB_PATH, JSON.stringify(payload, null, 2));
   return payload;
+}
+
+async function upsertOrder(order) {
+  if (USE_SUPABASE) {
+    const rows = await supabaseFetch('orders', {
+      method: 'POST',
+      query: '?on_conflict=id',
+      prefer: 'resolution=merge-duplicates,return=representation',
+      body: [mapOrderToSupabase(order)]
+    });
+    return mapOrderFromSupabase(rows[0]);
+  }
+  const db = await readDb();
+  db.orders = [order, ...db.orders.filter(existing => existing.id !== order.id)];
+  const saved = await writeDb(db);
+  return saved.orders.find(existing => existing.id === order.id);
+}
+
+async function insertOrder(order) {
+  if (USE_SUPABASE) {
+    const rows = await supabaseFetch('orders', {
+      method: 'POST',
+      prefer: 'return=representation',
+      body: [mapOrderToSupabase(order)]
+    });
+    return mapOrderFromSupabase(rows[0]);
+  }
+  const db = await readDb();
+  if (db.orders.some(existing => existing.id === order.id)) {
+    const error = new Error('Order number is already in use. Refresh and try again.');
+    error.statusCode = 409;
+    throw error;
+  }
+  db.orders = [order, ...db.orders];
+  const saved = await writeDb(db);
+  return saved.orders.find(existing => existing.id === order.id);
+}
+
+async function writeOrderCounter(orderCounter) {
+  if (USE_SUPABASE) {
+    await supabaseFetch('app_state', {
+      method: 'POST',
+      query: '?on_conflict=key',
+      prefer: 'resolution=merge-duplicates,return=minimal',
+      body: [{ key: 'order_counter', value: orderCounter }]
+    });
+    return orderCounter;
+  }
+  const db = await readDb();
+  db.orderCounter = orderCounter;
+  const saved = await writeDb(db);
+  return saved.orderCounter;
 }
 
 async function writeProducts(products) {
@@ -486,46 +545,18 @@ async function handleApi(req, res, url) {
 
   if (req.method === 'GET' && url.pathname === '/api/state') {
     const db = await readDb();
-    sendJson(res, 200, authenticatedUser.role === 'admin'
-      ? { ...db, cart: {} }
-      : { cart: db.cart, orders: db.orders, orderCounter: db.orderCounter, products: db.products, updatedAt: db.updatedAt, storage: db.storage });
+    sendJson(res, 200, {
+      orders: db.orders,
+      orderCounter: db.orderCounter,
+      products: db.products,
+      updatedAt: db.updatedAt,
+      storage: db.storage
+    });
     return;
   }
 
   if (req.method === 'PUT' && url.pathname === '/api/state') {
-    if (authenticatedUser.role !== 'cashier') {
-      sendJson(res, 403, { error: 'Forbidden' });
-      return;
-    }
-    const body = await readJson(req);
-    const currentDb = await readDb();
-    const currentOrders = new Map((currentDb.orders || []).map(order => [String(order.id), order]));
-    const nextOrders = Array.isArray(body.orders) ? body.orders : [];
-    const nextOrderIds = new Set(nextOrders.map(order => String(order.id)));
-    const hasDeletedOrders = [...currentOrders.keys()].some(id => !nextOrderIds.has(id));
-    const hasProtectedMutation = nextOrders.some(order => {
-      const current = currentOrders.get(String(order.id));
-      if (!current) return order.status !== 'pending' || Boolean(order.voidRequest);
-      const unauthorizedVoid = order.status === 'voided'
-        && current.status !== 'voided'
-        && (current.status === 'done' || current.previouslyCompleted === true);
-      const clearedCompletionAudit = (current.status === 'done' && order.status === 'pending' && order.previouslyCompleted !== true)
-        || (current.previouslyCompleted === true && order.previouslyCompleted !== true);
-      const restoredVoidedOrder = current.status === 'voided' && order.status !== 'voided';
-      const changedVoidRequest = JSON.stringify(current.voidRequest || null) !== JSON.stringify(order.voidRequest || null);
-      return unauthorizedVoid || clearedCompletionAudit || restoredVoidedOrder || changedVoidRequest;
-    });
-    if (hasDeletedOrders || hasProtectedMutation) {
-      sendJson(res, 403, { error: 'Protected order history cannot be changed without authorization.' });
-      return;
-    }
-    const nextDb = {
-      ...currentDb,
-      cart: body.cart && typeof body.cart === 'object' ? body.cart : {},
-      orders: nextOrders,
-      orderCounter: Number.isInteger(body.orderCounter) ? body.orderCounter : currentDb.orderCounter
-    };
-    sendJson(res, 200, await writeDb(nextDb));
+    sendJson(res, 405, { error: 'Use the resource-specific order and product endpoints.' });
     return;
   }
 
@@ -545,7 +576,14 @@ async function handleApi(req, res, url) {
       return sendJson(res, 409, { error: 'A void request is already pending.' });
     }
     if (order.status !== 'done' && order.previouslyCompleted !== true) {
-      return sendJson(res, 400, { error: 'Only completed orders require a void request.' });
+      order.previousStatus = order.status;
+      order.status = 'voided';
+      order.voidReason = reason;
+      order.voidedAt = new Date().toISOString();
+      order.voidedBy = authenticatedUser.name || authenticatedUser.sub;
+      const savedOrder = await upsertOrder(order);
+      sendJson(res, 200, { order: savedOrder });
+      return;
     }
     order.voidRequest = {
       status: 'pending',
@@ -553,8 +591,8 @@ async function handleApi(req, res, url) {
       requestedAt: new Date().toISOString(),
       requestedBy: authenticatedUser.name || authenticatedUser.sub
     };
-    await writeDb(db);
-    sendJson(res, 201, { order });
+    const savedOrder = await upsertOrder(order);
+    sendJson(res, 201, { order: savedOrder });
     return;
   }
 
@@ -589,8 +627,8 @@ async function handleApi(req, res, url) {
       reviewedAt,
       reviewedBy: authenticatedUser.name || authenticatedUser.sub
     };
-    await writeDb(db);
-    sendJson(res, 200, { order });
+    const savedOrder = await upsertOrder(order);
+    sendJson(res, 200, { order: savedOrder });
     return;
   }
 
@@ -608,12 +646,23 @@ async function handleApi(req, res, url) {
       return;
     }
     const db = await readDb();
+    if (order.requestId) {
+      const existing = db.orders.find(item => item.requestId === order.requestId);
+      if (existing) {
+        sendJson(res, 200, { order: existing, orderCounter: db.orderCounter, duplicate: true });
+        return;
+      }
+    }
     const id = Number.isInteger(order.id) ? order.id : db.orderCounter;
+    if (db.orders.some(existing => existing.id === id)) {
+      sendJson(res, 409, { error: 'Order number is already in use. Refresh and try again.' });
+      return;
+    }
     const savedOrder = { ...order, id, status: 'pending' };
-    db.orders = [savedOrder, ...db.orders.filter(existing => existing.id !== id)];
     db.orderCounter = Math.max(db.orderCounter, id + 1);
-    await writeDb(db);
-    sendJson(res, 201, { order: savedOrder, orderCounter: db.orderCounter });
+    const persistedOrder = await insertOrder(savedOrder);
+    await writeOrderCounter(db.orderCounter);
+    sendJson(res, 201, { order: persistedOrder, orderCounter: db.orderCounter });
     return;
   }
 
@@ -629,6 +678,11 @@ async function handleApi(req, res, url) {
       return;
     }
     const current = db.orders[index];
+    if (patch.expectedUpdatedAt && current.updatedAt && patch.expectedUpdatedAt !== current.updatedAt) {
+      sendJson(res, 409, { error: 'This order changed on another device. Refresh and try again.' });
+      return;
+    }
+    delete patch.expectedUpdatedAt;
     const protectedFields = ['voidRequest', 'voidReason', 'voidedAt', 'voidedBy', 'authorizedBy', 'previousStatus'];
     if (protectedFields.some(field => Object.hasOwn(patch, field))
       || patch.status === 'voided'
@@ -638,9 +692,8 @@ async function handleApi(req, res, url) {
       sendJson(res, 403, { error: 'Protected order history cannot be changed through this endpoint.' });
       return;
     }
-    db.orders[index] = { ...db.orders[index], ...patch, id };
-    await writeDb(db);
-    sendJson(res, 200, { order: db.orders[index] });
+    const savedOrder = await upsertOrder({ ...db.orders[index], ...patch, id });
+    sendJson(res, 200, { order: savedOrder });
     return;
   }
 

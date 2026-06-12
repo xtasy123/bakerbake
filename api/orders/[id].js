@@ -1,5 +1,5 @@
 const { requireRole } = require('../_lib/auth');
-const { readDb, writeDb, readJson, sendJson, sendError } = require('../_lib/supabase-storage');
+const { readDb, upsertOrder, readJson, sendJson, sendError } = require('../_lib/supabase-storage');
 
 module.exports = async function handler(req, res) {
   try {
@@ -11,6 +11,10 @@ module.exports = async function handler(req, res) {
     const index = db.orders.findIndex(order => order.id === id);
     if (index === -1) return sendJson(res, 404, { error: 'Order not found' });
     const current = db.orders[index];
+    if (patch.expectedUpdatedAt && current.updatedAt && patch.expectedUpdatedAt !== current.updatedAt) {
+      return sendJson(res, 409, { error: 'This order was changed on another device. Refresh and try again.' });
+    }
+    delete patch.expectedUpdatedAt;
     const protectedFields = ['voidRequest', 'voidReason', 'voidedAt', 'voidedBy', 'authorizedBy', 'previousStatus'];
     if (protectedFields.some(field => Object.hasOwn(patch, field))
       || patch.status === 'voided'
@@ -19,9 +23,8 @@ module.exports = async function handler(req, res) {
       || (current.status === 'done' && patch.status === 'pending' && patch.previouslyCompleted !== true)) {
       return sendJson(res, 403, { error: 'Protected order history cannot be changed through this endpoint.' });
     }
-    db.orders[index] = { ...db.orders[index], ...patch, id };
-    await writeDb(db);
-    sendJson(res, 200, { order: db.orders[index] });
+    const savedOrder = await upsertOrder({ ...current, ...patch, id });
+    sendJson(res, 200, { order: savedOrder });
   } catch (error) {
     sendError(res, error);
   }

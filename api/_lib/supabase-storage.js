@@ -49,7 +49,7 @@ function defaultDb() {
 }
 
 function mapOrderFromSupabase(row) {
-  return row.payload || {
+  const order = row.payload || {
     id: row.id,
     items: row.items || [],
     total: Number(row.total || 0),
@@ -61,6 +61,7 @@ function mapOrderFromSupabase(row) {
     payment: row.payment || null,
     method: row.payment_method || 'cash'
   };
+  return { ...order, updatedAt: row.updated_at || order.updatedAt || null };
 }
 
 function mapOrderToSupabase(order) {
@@ -127,12 +128,22 @@ async function readDb() {
 
 async function writeDb(db) {
   const next = { ...defaultDb(), ...db };
-  await Promise.all([
-    supabaseFetch('orders', { method: 'DELETE', query: '?id=gte.0', prefer: 'return=minimal' }),
-    supabaseFetch('closeouts', { method: 'DELETE', query: '?id=gte.0', prefer: 'return=minimal' })
-  ]);
-  if (next.orders.length) await supabaseFetch('orders', { method: 'POST', body: next.orders.map(mapOrderToSupabase) });
-  if (next.closeouts.length) await supabaseFetch('closeouts', { method: 'POST', body: next.closeouts.map(mapCloseoutToSupabase) });
+  if (next.orders.length) {
+    await supabaseFetch('orders', {
+      method: 'POST',
+      query: '?on_conflict=id',
+      prefer: 'resolution=merge-duplicates,return=minimal',
+      body: next.orders.map(mapOrderToSupabase)
+    });
+  }
+  if (next.closeouts.length) {
+    await supabaseFetch('closeouts', {
+      method: 'POST',
+      query: '?on_conflict=id',
+      prefer: 'resolution=merge-duplicates,return=minimal',
+      body: next.closeouts.map(mapCloseoutToSupabase)
+    });
+  }
   await supabaseFetch('app_state', {
     method: 'POST',
     query: '?on_conflict=key',
@@ -153,6 +164,34 @@ async function writeProducts(products) {
     body: [{ key: 'product_catalog', value: products }]
   });
   return products;
+}
+
+async function upsertOrder(order) {
+  const rows = await supabaseFetch('orders', {
+    method: 'POST',
+    query: '?on_conflict=id',
+    prefer: 'resolution=merge-duplicates,return=representation',
+    body: [mapOrderToSupabase(order)]
+  });
+  return mapOrderFromSupabase(rows[0]);
+}
+
+async function insertOrder(order) {
+  const rows = await supabaseFetch('orders', {
+    method: 'POST',
+    prefer: 'return=representation',
+    body: [mapOrderToSupabase(order)]
+  });
+  return mapOrderFromSupabase(rows[0]);
+}
+
+async function writeOrderCounter(orderCounter) {
+  await supabaseFetch('app_state', {
+    method: 'POST',
+    query: '?on_conflict=key',
+    prefer: 'resolution=merge-duplicates,return=representation',
+    body: [{ key: 'order_counter', value: orderCounter }]
+  });
 }
 
 async function uploadProductImage({ data, contentType }) {
@@ -232,6 +271,9 @@ module.exports = {
   supabaseFetch,
   readDb,
   writeDb,
+  upsertOrder,
+  insertOrder,
+  writeOrderCounter,
   writeProducts,
   uploadProductImage,
   readJson,

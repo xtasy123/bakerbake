@@ -1,5 +1,5 @@
 const { requireAuth, requireRole } = require('./_lib/auth');
-const { readDb, writeDb, readJson, sendJson, sendError } = require('./_lib/supabase-storage');
+const { readDb, insertOrder, writeOrderCounter, readJson, sendJson, sendError } = require('./_lib/supabase-storage');
 
 module.exports = async function handler(req, res) {
   try {
@@ -12,12 +12,20 @@ module.exports = async function handler(req, res) {
       if (order.status && order.status !== 'pending') {
         return sendJson(res, 400, { error: 'New orders must start as pending.' });
       }
+      const existing = order.requestId
+        ? db.orders.find(candidate => candidate.requestId === order.requestId)
+        : null;
+      if (existing) {
+        return sendJson(res, 200, { order: existing, orderCounter: db.orderCounter, duplicate: true });
+      }
       const id = Number.isInteger(order.id) ? order.id : db.orderCounter;
-      const savedOrder = { ...order, id, status: 'pending' };
-      db.orders = [savedOrder, ...db.orders.filter(existing => existing.id !== id)];
-      db.orderCounter = Math.max(db.orderCounter, id + 1);
-      await writeDb(db);
-      return sendJson(res, 201, { order: savedOrder, orderCounter: db.orderCounter });
+      if (db.orders.some(candidate => candidate.id === id)) {
+        return sendJson(res, 409, { error: 'Order number conflict. Refresh and try again.' });
+      }
+      const savedOrder = await insertOrder({ ...order, id, status: 'pending' });
+      const nextCounter = Math.max(db.orderCounter, id + 1);
+      await writeOrderCounter(nextCounter);
+      return sendJson(res, 201, { order: savedOrder, orderCounter: nextCounter });
     }
     sendJson(res, 405, { error: 'Method not allowed' });
   } catch (error) {

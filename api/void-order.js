@@ -1,5 +1,5 @@
 const { requireRole } = require('./_lib/auth');
-const { readDb, writeDb, readJson, sendJson, sendError } = require('./_lib/supabase-storage');
+const { readDb, upsertOrder, readJson, sendJson, sendError } = require('./_lib/supabase-storage');
 
 module.exports = async function handler(req, res) {
   try {
@@ -16,8 +16,20 @@ module.exports = async function handler(req, res) {
       if (order.voidRequest?.status === 'pending') {
         return sendJson(res, 409, { error: 'A void request is already pending.' });
       }
+      if (order.status === 'pending' && order.previouslyCompleted !== true) {
+        const voidedAt = new Date().toISOString();
+        const savedOrder = await upsertOrder({
+          ...order,
+          previousStatus: order.status,
+          status: 'voided',
+          voidReason: reason,
+          voidedAt,
+          voidedBy: cashier.name || cashier.sub
+        });
+        return sendJson(res, 200, { order: savedOrder });
+      }
       if (order.status !== 'done' && order.previouslyCompleted !== true) {
-        return sendJson(res, 400, { error: 'Only completed orders require a void request.' });
+        return sendJson(res, 400, { error: 'This order cannot be voided.' });
       }
 
       order.voidRequest = {
@@ -26,8 +38,7 @@ module.exports = async function handler(req, res) {
         requestedAt: new Date().toISOString(),
         requestedBy: cashier.name || cashier.sub
       };
-      await writeDb(db);
-      return sendJson(res, 201, { order });
+      return sendJson(res, 201, { order: await upsertOrder(order) });
     }
 
     if (req.method === 'PATCH') {
@@ -60,8 +71,7 @@ module.exports = async function handler(req, res) {
         reviewedAt,
         reviewedBy: admin.name || admin.sub
       };
-      await writeDb(db);
-      return sendJson(res, 200, { order });
+      return sendJson(res, 200, { order: await upsertOrder(order) });
     }
 
     return sendJson(res, 405, { error: 'Method not allowed' });
