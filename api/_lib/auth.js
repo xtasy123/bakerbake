@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const SESSION_SECRET = process.env.SESSION_SECRET || '';
 const POS_USERS_JSON = process.env.POS_USERS_JSON || '[]';
 const TOKEN_TTL_SECONDS = Number(process.env.TOKEN_TTL_SECONDS || 60 * 60 * 12);
+const SUPABASE_JWT_SECRET = process.env.SUPABASE_JWT_SECRET || '';
 
 function base64Url(input) {
   return Buffer.from(input).toString('base64url');
@@ -58,6 +59,25 @@ function createToken(user) {
   return `${encoded}.${sign(encoded)}`;
 }
 
+function createSupabaseToken(user) {
+  if (!SUPABASE_JWT_SECRET) return '';
+  const now = Math.floor(Date.now() / 1000);
+  const header = base64Url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const payload = base64Url(JSON.stringify({
+    sub: user.username || user.sub,
+    role: 'authenticated',
+    app_role: user.role || 'cashier',
+    name: user.name,
+    iat: now,
+    exp: now + Math.min(TOKEN_TTL_SECONDS, 60 * 60)
+  }));
+  const signature = crypto
+    .createHmac('sha256', SUPABASE_JWT_SECRET)
+    .update(`${header}.${payload}`)
+    .digest('base64url');
+  return `${header}.${payload}.${signature}`;
+}
+
 function verifyToken(token) {
   if (!SESSION_SECRET || !token || !token.includes('.')) return null;
   const [encoded, signature] = token.split('.');
@@ -94,15 +114,28 @@ function requireRole(req, role) {
   return user;
 }
 
-function authenticate(username, password) {
-  const users = getUsers();
-  if (!SESSION_SECRET || !users.length) {
+async function authenticate(username, password) {
+  const { findUserByUsername, upsertUsers } = require('./supabase-storage');
+  const fallbackUsers = getUsers();
+  if (!SESSION_SECRET) {
     const error = new Error('Backend authentication is not configured.');
     error.statusCode = 500;
     throw error;
   }
   const normalized = String(username || '').trim().toLowerCase();
-  const user = users.find(candidate => String(candidate.username || '').toLowerCase() === normalized);
+  let user = null;
+  try {
+    user = await findUserByUsername(normalized);
+  } catch (error) {
+    if (!fallbackUsers.length) throw error;
+  }
+  if (!user && fallbackUsers.length) {
+    await upsertUsers(fallbackUsers);
+    user = fallbackUsers.find(candidate => String(candidate.username || '').toLowerCase() === normalized);
+  }
+  if (user?.password_hash && !user.passwordHash) {
+    user = { ...user, passwordHash: user.password_hash };
+  }
   if (!user || !verifyPassword(password, user.passwordHash)) {
     const error = new Error('Invalid username or password.');
     error.statusCode = 401;
@@ -110,13 +143,15 @@ function authenticate(username, password) {
   }
   return {
     user: publicUser(user),
-    token: createToken(user)
+    token: createToken(user),
+    realtimeToken: createSupabaseToken(user)
   };
 }
 
 module.exports = {
   authenticate,
   createToken,
+  createSupabaseToken,
   publicUser,
   requireAuth,
   requireRole,

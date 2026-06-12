@@ -67,3 +67,6 @@ alter table public.app_state enable row level security;
 -- No public RLS policies are created here.
 -- The local Node backend uses the service role key server-side, which bypasses RLS.
 -- Do not expose SUPABASE_SERVICE_ROLE_KEY in browser code.
+--
+-- Existing installations must also run:
+-- supabase/migrations/20260612_normalize_pos.sql

@@ -1,9 +1,9 @@
 const { requireRole } = require('../_lib/auth');
-const { readDb, upsertOrder, readJson, sendJson, sendError } = require('../_lib/supabase-storage');
+const { readDb, upsertOrder, writeAudit, readJson, sendJson, sendError } = require('../_lib/supabase-storage');
 
 module.exports = async function handler(req, res) {
   try {
-    requireRole(req, 'cashier');
+    const cashier = requireRole(req, 'cashier');
     if (req.method !== 'PATCH') return sendJson(res, 405, { error: 'Method not allowed' });
     const id = Number(req.query.id);
     const patch = await readJson(req);
@@ -24,6 +24,13 @@ module.exports = async function handler(req, res) {
       return sendJson(res, 403, { error: 'Protected order history cannot be changed through this endpoint.' });
     }
     const savedOrder = await upsertOrder({ ...current, ...patch, id });
+    await writeAudit({
+      actor: cashier,
+      action: patch.status ? `order.status.${patch.status}` : 'order.updated',
+      entityType: 'order',
+      entityId: id,
+      details: { fields: Object.keys(patch) }
+    });
     sendJson(res, 200, { order: savedOrder });
   } catch (error) {
     sendError(res, error);

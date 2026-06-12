@@ -1,5 +1,14 @@
 const { requireRole } = require('./_lib/auth');
-const { readDb, upsertOrder, readJson, sendJson, sendError } = require('./_lib/supabase-storage');
+const {
+  readDb,
+  upsertOrder,
+  createVoidRequest,
+  reviewVoidRequest,
+  writeAudit,
+  readJson,
+  sendJson,
+  sendError
+} = require('./_lib/supabase-storage');
 
 module.exports = async function handler(req, res) {
   try {
@@ -26,19 +35,31 @@ module.exports = async function handler(req, res) {
           voidedAt,
           voidedBy: cashier.name || cashier.sub
         });
+        await writeAudit({
+          actor: cashier,
+          action: 'order.voided',
+          entityType: 'order',
+          entityId: order.id,
+          details: { reason }
+        });
         return sendJson(res, 200, { order: savedOrder });
       }
       if (order.status !== 'done' && order.previouslyCompleted !== true) {
         return sendJson(res, 400, { error: 'This order cannot be voided.' });
       }
 
-      order.voidRequest = {
-        status: 'pending',
-        reason,
-        requestedAt: new Date().toISOString(),
-        requestedBy: cashier.name || cashier.sub
-      };
-      return sendJson(res, 201, { order: await upsertOrder(order) });
+      await createVoidRequest(order, reason, cashier.name || cashier.sub);
+      await writeAudit({
+        actor: cashier,
+        action: 'void_request.created',
+        entityType: 'order',
+        entityId: order.id,
+        details: { reason }
+      });
+      const refreshed = await readDb();
+      return sendJson(res, 201, {
+        order: refreshed.orders.find(item => String(item.id) === String(order.id))
+      });
     }
 
     if (req.method === 'PATCH') {
@@ -65,13 +86,19 @@ module.exports = async function handler(req, res) {
         order.voidedBy = order.voidRequest.requestedBy;
         order.authorizedBy = admin.name || admin.sub;
       }
-      order.voidRequest = {
-        ...order.voidRequest,
-        status: decision === 'approve' ? 'approved' : 'rejected',
-        reviewedAt,
-        reviewedBy: admin.name || admin.sub
-      };
-      return sendJson(res, 200, { order: await upsertOrder(order) });
+      await reviewVoidRequest(order.id, decision, admin.name || admin.sub);
+      const savedOrder = decision === 'approve' ? await upsertOrder(order) : order;
+      await writeAudit({
+        actor: admin,
+        action: `void_request.${decision === 'approve' ? 'approved' : 'rejected'}`,
+        entityType: 'order',
+        entityId: order.id,
+        details: { reason: order.voidRequest.reason }
+      });
+      const refreshed = await readDb();
+      return sendJson(res, 200, {
+        order: refreshed.orders.find(item => String(item.id) === String(savedOrder.id))
+      });
     }
 
     return sendJson(res, 405, { error: 'Method not allowed' });

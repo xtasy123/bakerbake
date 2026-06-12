@@ -6,6 +6,8 @@ const crypto = require('crypto');
 const ROOT = __dirname;
 
 loadDotEnv();
+const normalizedStorage = require('./api/_lib/supabase-storage');
+const normalizedAuth = require('./api/_lib/auth');
 
 const DATA_DIR = path.join(ROOT, 'data');
 const DB_PATH = path.join(DATA_DIR, 'db.json');
@@ -368,7 +370,7 @@ async function ensureDb() {
 }
 
 async function readDb() {
-  if (USE_SUPABASE) return readSupabaseDb();
+  if (USE_SUPABASE) return normalizedStorage.readDb();
   await ensureDb();
   try {
     const raw = await fs.readFile(DB_PATH, 'utf8');
@@ -379,7 +381,7 @@ async function readDb() {
 }
 
 async function writeDb(db) {
-  if (USE_SUPABASE) return writeSupabaseDb(db);
+  if (USE_SUPABASE) return normalizedStorage.writeDb(db);
   await fs.mkdir(DATA_DIR, { recursive: true });
   const payload = {
     ...defaultDb(),
@@ -391,15 +393,7 @@ async function writeDb(db) {
 }
 
 async function upsertOrder(order) {
-  if (USE_SUPABASE) {
-    const rows = await supabaseFetch('orders', {
-      method: 'POST',
-      query: '?on_conflict=id',
-      prefer: 'resolution=merge-duplicates,return=representation',
-      body: [mapOrderToSupabase(order)]
-    });
-    return mapOrderFromSupabase(rows[0]);
-  }
+  if (USE_SUPABASE) return normalizedStorage.upsertOrder(order);
   const db = await readDb();
   db.orders = [order, ...db.orders.filter(existing => existing.id !== order.id)];
   const saved = await writeDb(db);
@@ -407,14 +401,7 @@ async function upsertOrder(order) {
 }
 
 async function insertOrder(order) {
-  if (USE_SUPABASE) {
-    const rows = await supabaseFetch('orders', {
-      method: 'POST',
-      prefer: 'return=representation',
-      body: [mapOrderToSupabase(order)]
-    });
-    return mapOrderFromSupabase(rows[0]);
-  }
+  if (USE_SUPABASE) return normalizedStorage.insertOrder(order);
   const db = await readDb();
   if (db.orders.some(existing => existing.id === order.id)) {
     const error = new Error('Order number is already in use. Refresh and try again.');
@@ -427,15 +414,7 @@ async function insertOrder(order) {
 }
 
 async function writeOrderCounter(orderCounter) {
-  if (USE_SUPABASE) {
-    await supabaseFetch('app_state', {
-      method: 'POST',
-      query: '?on_conflict=key',
-      prefer: 'resolution=merge-duplicates,return=minimal',
-      body: [{ key: 'order_counter', value: orderCounter }]
-    });
-    return orderCounter;
-  }
+  if (USE_SUPABASE) return normalizedStorage.writeOrderCounter(orderCounter);
   const db = await readDb();
   db.orderCounter = orderCounter;
   const saved = await writeDb(db);
@@ -443,15 +422,7 @@ async function writeOrderCounter(orderCounter) {
 }
 
 async function writeProducts(products) {
-  if (USE_SUPABASE) {
-    await supabaseFetch('app_state', {
-      method: 'POST',
-      query: '?on_conflict=key',
-      prefer: 'resolution=merge-duplicates,return=representation',
-      body: [{ key: 'product_catalog', value: products }]
-    });
-    return products;
-  }
+  if (USE_SUPABASE) return normalizedStorage.writeProducts(products);
   const db = await readDb();
   db.products = products;
   const saved = await writeDb(db);
@@ -513,6 +484,17 @@ async function handleApi(req, res, url) {
 
   if (req.method === 'POST' && url.pathname === '/api/login') {
     const body = await readJson(req);
+    if (USE_SUPABASE) {
+      const result = await normalizedAuth.authenticate(body.username, String(body.password || ''));
+      await normalizedStorage.writeAudit({
+        actor: result.user,
+        action: 'session.login',
+        entityType: 'user',
+        entityId: result.user.username
+      });
+      sendJson(res, 200, result);
+      return;
+    }
     const username = String(body.username || '').trim().toLowerCase();
     const password = String(body.password || '');
     const users = getUsers();
@@ -537,11 +519,25 @@ async function handleApi(req, res, url) {
 
   if (req.method === 'GET' && url.pathname === '/api/session') {
     const user = requireAuth(req);
-    sendJson(res, 200, { user });
+    sendJson(res, 200, {
+      user,
+      realtimeToken: USE_SUPABASE ? normalizedAuth.createSupabaseToken(user) : ''
+    });
     return;
   }
 
   const authenticatedUser = requireAuth(req);
+
+  if (req.method === 'GET' && url.pathname === '/api/realtime') {
+    const anonKey = process.env.SUPABASE_ANON_KEY || '';
+    const token = normalizedAuth.createSupabaseToken(authenticatedUser);
+    if (!USE_SUPABASE || !anonKey || !token) {
+      sendJson(res, 503, { error: 'Supabase Realtime is not configured.' });
+      return;
+    }
+    sendJson(res, 200, { url: SUPABASE_URL, anonKey, token });
+    return;
+  }
 
   if (req.method === 'GET' && url.pathname === '/api/state') {
     const db = await readDb();
@@ -582,7 +578,35 @@ async function handleApi(req, res, url) {
       order.voidedAt = new Date().toISOString();
       order.voidedBy = authenticatedUser.name || authenticatedUser.sub;
       const savedOrder = await upsertOrder(order);
+      if (USE_SUPABASE) {
+        await normalizedStorage.writeAudit({
+          actor: authenticatedUser,
+          action: 'order.voided',
+          entityType: 'order',
+          entityId: order.id,
+          details: { reason }
+        });
+      }
       sendJson(res, 200, { order: savedOrder });
+      return;
+    }
+    if (USE_SUPABASE) {
+      await normalizedStorage.createVoidRequest(
+        order,
+        reason,
+        authenticatedUser.name || authenticatedUser.sub
+      );
+      await normalizedStorage.writeAudit({
+        actor: authenticatedUser,
+        action: 'void_request.created',
+        entityType: 'order',
+        entityId: order.id,
+        details: { reason }
+      });
+      const refreshed = await readDb();
+      sendJson(res, 201, {
+        order: refreshed.orders.find(item => String(item.id) === String(order.id))
+      });
       return;
     }
     order.voidRequest = {
@@ -620,6 +644,26 @@ async function handleApi(req, res, url) {
       order.voidedAt = reviewedAt;
       order.voidedBy = order.voidRequest.requestedBy;
       order.authorizedBy = authenticatedUser.name || authenticatedUser.sub;
+    }
+    if (USE_SUPABASE) {
+      await normalizedStorage.reviewVoidRequest(
+        order.id,
+        decision,
+        authenticatedUser.name || authenticatedUser.sub
+      );
+      if (decision === 'approve') await upsertOrder(order);
+      await normalizedStorage.writeAudit({
+        actor: authenticatedUser,
+        action: `void_request.${decision === 'approve' ? 'approved' : 'rejected'}`,
+        entityType: 'order',
+        entityId: order.id,
+        details: { reason: order.voidRequest.reason }
+      });
+      const refreshed = await readDb();
+      sendJson(res, 200, {
+        order: refreshed.orders.find(item => String(item.id) === String(order.id))
+      });
+      return;
     }
     order.voidRequest = {
       ...order.voidRequest,
@@ -662,6 +706,15 @@ async function handleApi(req, res, url) {
     db.orderCounter = Math.max(db.orderCounter, id + 1);
     const persistedOrder = await insertOrder(savedOrder);
     await writeOrderCounter(db.orderCounter);
+    if (USE_SUPABASE) {
+      await normalizedStorage.writeAudit({
+        actor: authenticatedUser,
+        action: 'order.created',
+        entityType: 'order',
+        entityId: id,
+        details: { total: persistedOrder.total, paymentMethod: persistedOrder.method }
+      });
+    }
     sendJson(res, 201, { order: persistedOrder, orderCounter: db.orderCounter });
     return;
   }
@@ -693,6 +746,15 @@ async function handleApi(req, res, url) {
       return;
     }
     const savedOrder = await upsertOrder({ ...db.orders[index], ...patch, id });
+    if (USE_SUPABASE) {
+      await normalizedStorage.writeAudit({
+        actor: authenticatedUser,
+        action: patch.status ? `order.status.${patch.status}` : 'order.updated',
+        entityType: 'order',
+        entityId: id,
+        details: { fields: Object.keys(patch) }
+      });
+    }
     sendJson(res, 200, { order: savedOrder });
     return;
   }
@@ -713,6 +775,17 @@ async function handleApi(req, res, url) {
       createdAt: closeout.createdAt || new Date().toISOString(),
       ...closeout
     };
+    if (USE_SUPABASE) {
+      const persisted = await normalizedStorage.insertCloseout(saved);
+      await normalizedStorage.writeAudit({
+        actor: authenticatedUser,
+        action: 'closeout.created',
+        entityType: 'closeout',
+        entityId: persisted.id
+      });
+      sendJson(res, 201, { closeout: persisted });
+      return;
+    }
     db.closeouts = [saved, ...(db.closeouts || [])];
     await writeDb(db);
     sendJson(res, 201, { closeout: saved });
@@ -733,6 +806,14 @@ async function handleApi(req, res, url) {
       return;
     }
     const products = await writeProducts(body.products);
+    if (USE_SUPABASE) {
+      await normalizedStorage.writeAudit({
+        actor: authenticatedUser,
+        action: 'products.updated',
+        entityType: 'product_catalog',
+        details: { productCount: products.length }
+      });
+    }
     sendJson(res, 200, { products });
     return;
   }

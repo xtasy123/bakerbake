@@ -1938,6 +1938,9 @@ let pendingUndoOrderId = null;
 let pendingVoidOrderId = null;
 let paymentSubmissionInProgress = false;
 let activePaymentRequestId = null;
+let realtimeClient = null;
+let realtimeChannel = null;
+let realtimeRefreshTimer = null;
 
 function getSession() {
   try {
@@ -2030,6 +2033,79 @@ async function syncFromBackend() {
   } catch (error) {
     console.warn('Backend sync failed:', error.message);
     setSyncStatus(navigator.onLine ? 'error' : 'offline', navigator.onLine ? 'Sync error' : 'Offline');
+  }
+}
+
+async function refreshOrdersFromBackend() {
+  const result = await apiRequest('/api/orders');
+  if (Array.isArray(result.orders)) orders = result.orders;
+  if (Number.isInteger(result.orderCounter)) orderCounter = result.orderCounter;
+  saveState();
+  renderOrders();
+  renderReports();
+  updatePendingBadge();
+  updateVoidRequestBadge();
+  if (isAdmin()) renderVoidRequests();
+}
+
+async function refreshProductsFromBackend() {
+  const result = await apiRequest('/api/products');
+  if (Array.isArray(result.products)) products = result.products;
+  saveState();
+  buildFilters();
+  renderCatalog();
+  renderAdminProducts();
+  renderCart();
+}
+
+function scheduleRealtimeRefresh(scope) {
+  if (realtimeRefreshTimer) clearTimeout(realtimeRefreshTimer);
+  realtimeRefreshTimer = setTimeout(async () => {
+    setSyncStatus('syncing', 'Syncing');
+    try {
+      if (scope === 'products') await refreshProductsFromBackend();
+      else await refreshOrdersFromBackend();
+      setSyncStatus('saved', 'Synced');
+    } catch (error) {
+      console.warn('Realtime refresh failed:', error.message);
+      setSyncStatus(navigator.onLine ? 'error' : 'offline', navigator.onLine ? 'Sync error' : 'Offline');
+    }
+  }, 150);
+}
+
+async function disconnectRealtime() {
+  if (realtimeClient && realtimeChannel) {
+    await realtimeClient.removeChannel(realtimeChannel);
+  }
+  realtimeChannel = null;
+  realtimeClient = null;
+}
+
+async function connectRealtime() {
+  if (!BACKEND_ENABLED || !currentUser || !navigator.onLine) return;
+  await disconnectRealtime();
+  try {
+    const config = await apiRequest('/api/realtime');
+    const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+    realtimeClient = createClient(config.url, config.anonKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: { headers: { Authorization: `Bearer ${config.token}` } }
+    });
+    await realtimeClient.realtime.setAuth(config.token);
+    realtimeChannel = realtimeClient
+      .channel(`pos-${currentUser.role}-${currentUser.username}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => scheduleRealtimeRefresh('orders'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, () => scheduleRealtimeRefresh('orders'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'void_requests' }, () => scheduleRealtimeRefresh('orders'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => scheduleRealtimeRefresh('products'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'product_variants' }, () => scheduleRealtimeRefresh('products'))
+      .subscribe(status => {
+        if (status === 'SUBSCRIBED') setSyncStatus('saved', 'Live');
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') setSyncStatus('error', 'Sync error');
+      });
+  } catch (error) {
+    console.warn('Realtime unavailable:', error.message);
+    setSyncStatus('error', 'Sync error');
   }
 }
 
@@ -2144,10 +2220,15 @@ async function login(event) {
         body: JSON.stringify({ username, password })
       });
       const sessionUser = result.user;
-      localStorage.setItem(SESSION_KEY, JSON.stringify({ user: sessionUser, token: result.token }));
+      localStorage.setItem(SESSION_KEY, JSON.stringify({
+        user: sessionUser,
+        token: result.token,
+        realtimeToken: result.realtimeToken
+      }));
       document.getElementById('login-error').textContent = '';
       showAppForUser(sessionUser, true);
       await syncFromBackend();
+      await connectRealtime();
     } catch (error) {
       document.getElementById('login-error').textContent = error.message || 'Invalid username or password.';
     }
@@ -2175,8 +2256,9 @@ function closeLogoutConfirm() {
   document.getElementById('logout-modal').classList.remove('open');
 }
 
-function confirmLogout() {
+async function confirmLogout() {
   closeLogoutConfirm();
+  await disconnectRealtime();
   localStorage.removeItem(SESSION_KEY);
   showLogin();
 }
@@ -2187,9 +2269,14 @@ async function restoreSession() {
     if (BACKEND_ENABLED && saved?.token) {
       const result = await apiRequest('/api/session');
       const user = result.user || saved.user;
-      localStorage.setItem(SESSION_KEY, JSON.stringify({ user, token: saved.token }));
+      localStorage.setItem(SESSION_KEY, JSON.stringify({
+        user,
+        token: saved.token,
+        realtimeToken: result.realtimeToken
+      }));
       showAppForUser(user);
       await syncFromBackend();
+      await connectRealtime();
       return;
     }
 
@@ -3701,17 +3788,16 @@ updatePendingBadge();
 updateVoidRequestBadge();
 restoreSession();
 
-setInterval(() => {
-  if (currentUser && BACKEND_ENABLED) {
-    syncFromBackend();
-  }
-}, 15000);
-
 window.addEventListener('online', () => {
   setSyncStatus('syncing', 'Reconnecting');
-  if (currentUser && BACKEND_ENABLED) syncFromBackend();
+  if (currentUser && BACKEND_ENABLED) {
+    syncFromBackend().then(connectRealtime);
+  }
 });
-window.addEventListener('offline', () => setSyncStatus('offline', 'Offline'));
+window.addEventListener('offline', () => {
+  disconnectRealtime();
+  setSyncStatus('offline', 'Offline');
+});
 setSyncStatus(
   BACKEND_ENABLED && !navigator.onLine ? 'offline' : 'local',
   BACKEND_ENABLED && !navigator.onLine ? 'Offline' : 'Local'

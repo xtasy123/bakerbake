@@ -10,6 +10,8 @@ const stateApi = read('api/state.js');
 const ordersApi = read('api/orders.js');
 const storage = read('api/_lib/supabase-storage.js');
 const server = read('server.js');
+const migration = read('supabase/migrations/20260612_normalize_pos.sql');
+const auth = read('api/_lib/auth.js');
 
 assert.match(index, /const CART_STORAGE_KEY = 'bakerbake-pos-cart-v1'/);
 assert.match(index, /localStorage\.setItem\(CART_STORAGE_KEY, JSON\.stringify\(cart\)\)/);
@@ -18,6 +20,10 @@ assert.match(index, /async function confirmPayment\(\)/);
 assert.match(index, /paymentSubmissionInProgress/);
 assert.match(index, /requestId: activePaymentRequestId/);
 assert.match(index, /async function patchOrder\(order, patch\)/);
+assert.match(index, /connectRealtime/);
+assert.match(index, /table: 'orders'/);
+assert.match(index, /table: 'void_requests'/);
+assert.doesNotMatch(index, /setInterval\(\(\) => \{\s*if \(currentUser && BACKEND_ENABLED\)/);
 
 assert.match(stateApi, /req\.method === 'PUT'/);
 assert.match(stateApi, /sendJson\(res, 405/);
@@ -28,6 +34,15 @@ assert.match(ordersApi, /insertOrder/);
 assert.doesNotMatch(ordersApi, /upsertOrder/);
 assert.match(storage, /async function upsertOrder/);
 assert.match(storage, /async function insertOrder/);
+assert.match(storage, /order_items/);
+assert.match(storage, /product_variants/);
+assert.match(storage, /async function writeAudit/);
+assert.match(auth, /async function authenticate/);
+assert.match(auth, /createSupabaseToken/);
+for (const table of ['products', 'product_variants', 'order_items', 'void_requests', 'pos_users', 'audit_logs']) {
+  assert.match(migration, new RegExp(`create table if not exists public\\.${table}`));
+}
+assert.match(migration, /alter publication supabase_realtime add table public\.orders/);
 assert.doesNotMatch(storage, /supabaseFetch\('orders',\s*\{\s*method: 'DELETE'/);
 assert.doesNotMatch(server, /supabaseFetch\('orders',\s*\{\s*method: 'DELETE'/);
 assert.match(server, /Use the resource-specific order and product endpoints/);
