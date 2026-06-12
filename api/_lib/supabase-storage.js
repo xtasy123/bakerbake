@@ -293,6 +293,23 @@ async function insertOrder(order) {
   return replaceOrderItemsAndRead(rows[0], order.items);
 }
 
+async function createOrderTransaction(order, actor) {
+  const result = await supabaseFetch('rpc/create_pos_order', {
+    method: 'POST',
+    body: {
+      p_order: mapOrderToSupabase(order),
+      p_items: (order.items || []).map(item => mapOrderItemToSupabase(0, item)),
+      p_actor_username: actor?.sub || actor?.username || null,
+      p_actor_role: actor?.role || null
+    }
+  });
+  return {
+    order: mapOrderFromSupabase(result.order),
+    orderCounter: Number(result.orderCounter),
+    duplicate: result.duplicate === true
+  };
+}
+
 async function replaceOrderItemsAndRead(orderRow, items) {
   await supabaseFetch('order_items', {
     method: 'DELETE',
@@ -481,6 +498,7 @@ module.exports = {
   writeDb,
   upsertOrder,
   insertOrder,
+  createOrderTransaction,
   createVoidRequest,
   reviewVoidRequest,
   findUserByUsername,

@@ -102,6 +102,12 @@ For an existing BakerBake database, run this migration in the Supabase SQL Edito
 
 It creates normalized product, order-item, void-request, user, and audit tables and backfills existing data. It does not delete existing orders.
 
+Then run:
+
+`supabase/migrations/20260612_create_order_rpc.sql`
+
+This creates the atomic payment transaction used to insert an order, its line items, the order counter, and the audit record in one database call.
+
 Add these Vercel environment variables in addition to the existing Supabase variables:
 
 - `SUPABASE_ANON_KEY`: Project Settings > API Keys > anon/public key.

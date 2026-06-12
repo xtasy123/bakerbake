@@ -11,6 +11,7 @@ const ordersApi = read('api/orders.js');
 const storage = read('api/_lib/supabase-storage.js');
 const server = read('server.js');
 const migration = read('supabase/migrations/20260612_normalize_pos.sql');
+const orderRpcMigration = read('supabase/migrations/20260612_create_order_rpc.sql');
 const auth = read('api/_lib/auth.js');
 
 assert.match(index, /const CART_STORAGE_KEY = 'bakerbake-pos-cart-v1'/);
@@ -30,11 +31,12 @@ assert.match(stateApi, /req\.method === 'PUT'/);
 assert.match(stateApi, /sendJson\(res, 405/);
 assert.doesNotMatch(stateApi, /writeDb|body\.cart/);
 
-assert.match(ordersApi, /order\.requestId/);
-assert.match(ordersApi, /insertOrder/);
+assert.match(ordersApi, /createOrderTransaction/);
 assert.doesNotMatch(ordersApi, /upsertOrder/);
+assert.doesNotMatch(ordersApi, /writeOrderCounter|writeAudit/);
 assert.match(storage, /async function upsertOrder/);
 assert.match(storage, /async function insertOrder/);
+assert.match(storage, /rpc\/create_pos_order/);
 assert.match(storage, /order_items/);
 assert.match(storage, /product_variants/);
 assert.match(storage, /async function writeAudit/);
@@ -44,6 +46,12 @@ for (const table of ['products', 'product_variants', 'order_items', 'void_reques
   assert.match(migration, new RegExp(`create table if not exists public\\.${table}`));
 }
 assert.match(migration, /alter publication supabase_realtime add table public\.orders/);
+assert.match(orderRpcMigration, /create or replace function public\.create_pos_order/);
+assert.match(orderRpcMigration, /v_request_id/);
+assert.match(orderRpcMigration, /'duplicate', true/);
+assert.match(orderRpcMigration, /for update/);
+assert.match(orderRpcMigration, /insert into public\.order_items/);
+assert.match(orderRpcMigration, /insert into public\.audit_logs/);
 assert.doesNotMatch(storage, /supabaseFetch\('orders',\s*\{\s*method: 'DELETE'/);
 assert.doesNotMatch(server, /supabaseFetch\('orders',\s*\{\s*method: 'DELETE'/);
 assert.match(server, /Use the resource-specific order and product endpoints/);

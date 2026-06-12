@@ -683,10 +683,18 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/orders') {
-    requireRole(req, 'cashier');
+    const cashier = requireRole(req, 'cashier');
     const order = await readJson(req);
     if (order.status && order.status !== 'pending') {
       sendJson(res, 400, { error: 'New orders must start as pending.' });
+      return;
+    }
+    if (USE_SUPABASE) {
+      const result = await normalizedStorage.createOrderTransaction(
+        { ...order, status: 'pending' },
+        cashier
+      );
+      sendJson(res, result.duplicate ? 200 : 201, result);
       return;
     }
     const db = await readDb();
@@ -706,15 +714,6 @@ async function handleApi(req, res, url) {
     db.orderCounter = Math.max(db.orderCounter, id + 1);
     const persistedOrder = await insertOrder(savedOrder);
     await writeOrderCounter(db.orderCounter);
-    if (USE_SUPABASE) {
-      await normalizedStorage.writeAudit({
-        actor: authenticatedUser,
-        action: 'order.created',
-        entityType: 'order',
-        entityId: id,
-        details: { total: persistedOrder.total, paymentMethod: persistedOrder.method }
-      });
-    }
     sendJson(res, 201, { order: persistedOrder, orderCounter: db.orderCounter });
     return;
   }
