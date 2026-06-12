@@ -532,10 +532,10 @@ async function handleApi(req, res, url) {
     const anonKey = process.env.SUPABASE_ANON_KEY || '';
     const token = normalizedAuth.createSupabaseToken(authenticatedUser);
     if (!USE_SUPABASE || !anonKey || !token) {
-      sendJson(res, 503, { error: 'Supabase Realtime is not configured.' });
+      sendJson(res, 200, { configured: false });
       return;
     }
-    sendJson(res, 200, { url: SUPABASE_URL, anonKey, token });
+    sendJson(res, 200, { configured: true, url: SUPABASE_URL, anonKey, token });
     return;
   }
 

@@ -21,9 +21,10 @@ assert.match(index, /paymentSubmissionInProgress/);
 assert.match(index, /requestId: activePaymentRequestId/);
 assert.match(index, /async function patchOrder\(order, patch\)/);
 assert.match(index, /connectRealtime/);
+assert.match(index, /startFallbackSync/);
 assert.match(index, /table: 'orders'/);
 assert.match(index, /table: 'void_requests'/);
-assert.doesNotMatch(index, /setInterval\(\(\) => \{\s*if \(currentUser && BACKEND_ENABLED\)/);
+assert.doesNotMatch(index, /syncFromBackend\(\);\s*\}\s*}, 15000/);
 
 assert.match(stateApi, /req\.method === 'PUT'/);
 assert.match(stateApi, /sendJson\(res, 405/);

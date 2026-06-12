@@ -1941,6 +1941,7 @@ let activePaymentRequestId = null;
 let realtimeClient = null;
 let realtimeChannel = null;
 let realtimeRefreshTimer = null;
+let fallbackSyncTimer = null;
 
 function getSession() {
   try {
@@ -2081,11 +2082,33 @@ async function disconnectRealtime() {
   realtimeClient = null;
 }
 
+function stopFallbackSync() {
+  if (fallbackSyncTimer) clearInterval(fallbackSyncTimer);
+  fallbackSyncTimer = null;
+}
+
+function startFallbackSync() {
+  stopFallbackSync();
+  setSyncStatus('saved', 'Synced');
+  fallbackSyncTimer = setInterval(() => {
+    if (currentUser && navigator.onLine) {
+      Promise.all([refreshOrdersFromBackend(), refreshProductsFromBackend()]).catch(() => {
+        setSyncStatus('error', 'Sync error');
+      });
+    }
+  }, 15000);
+}
+
 async function connectRealtime() {
   if (!BACKEND_ENABLED || !currentUser || !navigator.onLine) return;
   await disconnectRealtime();
+  stopFallbackSync();
   try {
     const config = await apiRequest('/api/realtime');
+    if (!config.configured) {
+      startFallbackSync();
+      return;
+    }
     const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
     realtimeClient = createClient(config.url, config.anonKey, {
       auth: { persistSession: false, autoRefreshToken: false },
@@ -2100,12 +2123,15 @@ async function connectRealtime() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => scheduleRealtimeRefresh('products'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'product_variants' }, () => scheduleRealtimeRefresh('products'))
       .subscribe(status => {
-        if (status === 'SUBSCRIBED') setSyncStatus('saved', 'Live');
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') setSyncStatus('error', 'Sync error');
+        if (status === 'SUBSCRIBED') {
+          stopFallbackSync();
+          setSyncStatus('saved', 'Live');
+        }
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') startFallbackSync();
       });
   } catch (error) {
-    console.warn('Realtime unavailable:', error.message);
-    setSyncStatus('error', 'Sync error');
+    console.warn('Realtime connection unavailable; using background sync:', error.message);
+    startFallbackSync();
   }
 }
 
@@ -2259,6 +2285,7 @@ function closeLogoutConfirm() {
 async function confirmLogout() {
   closeLogoutConfirm();
   await disconnectRealtime();
+  stopFallbackSync();
   localStorage.removeItem(SESSION_KEY);
   showLogin();
 }
@@ -3796,6 +3823,7 @@ window.addEventListener('online', () => {
 });
 window.addEventListener('offline', () => {
   disconnectRealtime();
+  stopFallbackSync();
   setSyncStatus('offline', 'Offline');
 });
 setSyncStatus(
