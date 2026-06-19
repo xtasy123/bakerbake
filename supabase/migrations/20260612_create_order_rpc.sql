@@ -182,3 +182,6 @@ $$;
 
 revoke all on function public.create_pos_order(jsonb, jsonb, text, text) from public;
 grant execute on function public.create_pos_order(jsonb, jsonb, text, text) to service_role;
+
+-- Ask PostgREST to discover the new function immediately.
+notify pgrst, 'reload schema';

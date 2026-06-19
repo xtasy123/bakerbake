@@ -528,6 +528,57 @@ async function handleApi(req, res, url) {
 
   const authenticatedUser = requireAuth(req);
 
+  if (url.pathname === '/api/inventory') {
+    const action = String(url.searchParams.get('action') || 'template');
+    const manilaDate = () => new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Manila',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(new Date());
+    if (req.method === 'GET' && action === 'template') {
+      sendJson(res, 200, await normalizedStorage.getInventoryTemplate());
+      return;
+    }
+    if (req.method === 'GET' && action === 'log') {
+      const logDate = String(url.searchParams.get('date') || manilaDate());
+      sendJson(res, 200, { log: await normalizedStorage.getInventoryLogByDate(logDate) });
+      return;
+    }
+    if (req.method === 'GET' && action === 'history') {
+      requireRole(req, 'admin');
+      sendJson(res, 200, { logs: await normalizedStorage.listInventoryLogs({ limit: 45 }) });
+      return;
+    }
+    if (req.method === 'GET' && action === 'sync-jobs') {
+      requireRole(req, 'admin');
+      sendJson(res, 200, { jobs: await normalizedStorage.listInventorySyncJobs({ limit: 25 }) });
+      return;
+    }
+    if (req.method === 'POST' && action === 'draft') {
+      const body = await readJson(req);
+      const log = await normalizedStorage.saveInventoryDraft({
+        logDate: String(body.logDate || manilaDate()),
+        lines: body.lines || [],
+        user: authenticatedUser
+      });
+      sendJson(res, 200, { log });
+      return;
+    }
+    if (req.method === 'POST' && action === 'submit') {
+      const body = await readJson(req);
+      const log = await normalizedStorage.submitInventoryLog({
+        logDate: String(body.logDate || manilaDate()),
+        lines: body.lines || [],
+        user: authenticatedUser
+      });
+      sendJson(res, 201, { log });
+      return;
+    }
+    sendJson(res, 405, { error: 'Method not allowed' });
+    return;
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/realtime') {
     const anonKey = process.env.SUPABASE_ANON_KEY || '';
     const token = normalizedAuth.createSupabaseToken(authenticatedUser);

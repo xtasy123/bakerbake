@@ -70,3 +70,4 @@ alter table public.app_state enable row level security;
 --
 -- Existing installations must also run:
 -- supabase/migrations/20260612_normalize_pos.sql
+-- supabase/migrations/20260619_inventory_feature.sql

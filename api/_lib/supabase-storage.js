@@ -294,20 +294,54 @@ async function insertOrder(order) {
 }
 
 async function createOrderTransaction(order, actor) {
-  const result = await supabaseFetch('rpc/create_pos_order', {
-    method: 'POST',
-    body: {
-      p_order: mapOrderToSupabase(order),
-      p_items: (order.items || []).map(item => mapOrderItemToSupabase(0, item)),
-      p_actor_username: actor?.sub || actor?.username || null,
-      p_actor_role: actor?.role || null
-    }
+  try {
+    const result = await supabaseFetch('rpc/create_pos_order', {
+      method: 'POST',
+      body: {
+        p_order: mapOrderToSupabase(order),
+        p_items: (order.items || []).map(item => mapOrderItemToSupabase(0, item)),
+        p_actor_username: actor?.sub || actor?.username || null,
+        p_actor_role: actor?.role || null
+      }
+    });
+    return {
+      order: mapOrderFromSupabase(result.order),
+      orderCounter: Number(result.orderCounter),
+      duplicate: result.duplicate === true
+    };
+  } catch (error) {
+    const rpcUnavailable = error.statusCode === 404
+      || /create_pos_order|schema cache|could not find the function/i.test(error.message);
+    if (!rpcUnavailable) throw error;
+    console.warn(JSON.stringify({
+      level: 'warn',
+      message: 'Atomic order RPC unavailable; using compatibility payment path.',
+      timestamp: new Date().toISOString()
+    }));
+    return createOrderCompatibility(order, actor);
+  }
+}
+
+async function createOrderCompatibility(order, actor) {
+  const db = await readDb();
+  const existing = order.requestId
+    ? db.orders.find(candidate => candidate.requestId === order.requestId)
+    : null;
+  if (existing) {
+    return { order: existing, orderCounter: db.orderCounter, duplicate: true };
+  }
+  const id = db.orderCounter;
+  const savedOrder = await insertOrder({ ...order, id, status: 'pending' });
+  const nextCounter = Math.max(db.orderCounter, id + 1);
+  await writeOrderCounter(nextCounter);
+  await writeAudit({
+    actor,
+    action: 'order.created',
+    entityType: 'order',
+    entityId: id,
+    details: { total: savedOrder.total, paymentMethod: savedOrder.method }
   });
-  return {
-    order: mapOrderFromSupabase(result.order),
-    orderCounter: Number(result.orderCounter),
-    duplicate: result.duplicate === true
-  };
+  return { order: savedOrder, orderCounter: nextCounter, duplicate: false };
 }
 
 async function replaceOrderItemsAndRead(orderRow, items) {
@@ -412,6 +446,242 @@ async function insertCloseout(closeout) {
   return mapCloseoutFromSupabase(rows[0]);
 }
 
+function mapInventoryLine(row) {
+  const item = Array.isArray(row.inventory_items) ? row.inventory_items[0] : row.inventory_items;
+  const category = Array.isArray(row.inventory_categories) ? row.inventory_categories[0] : row.inventory_categories;
+  const unit = Array.isArray(row.inventory_units) ? row.inventory_units[0] : row.inventory_units;
+  return {
+    id: row.id,
+    categoryId: row.category_id,
+    categoryName: category?.name || '',
+    itemId: row.item_id,
+    itemName: row.custom_item_name || item?.name || '',
+    customItemName: row.custom_item_name || '',
+    unitId: row.unit_id,
+    unitCode: unit?.code || '',
+    inQty: Number(row.in_qty || 0),
+    outQty: Number(row.out_qty || 0),
+    remainingQty: Number(row.remaining_qty || 0),
+    isCustom: row.is_custom === true,
+    sortOrder: Number(row.sort_order || 0),
+    notes: row.notes || ''
+  };
+}
+
+function mapInventoryLog(row, lines = []) {
+  return {
+    id: row.id,
+    logDate: row.log_date,
+    status: row.status,
+    submittedBy: row.submitted_by,
+    submittedAt: row.submitted_at,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    lines
+  };
+}
+
+async function getInventoryTemplate() {
+  const [unitRows, categoryRows] = await Promise.all([
+    supabaseFetch('inventory_units', { query: '?select=*&order=sort_order.asc,code.asc' }),
+    supabaseFetch('inventory_categories', {
+      query: '?active=eq.true&select=*,inventory_items(*,inventory_units(*))&order=sort_order.asc'
+    })
+  ]);
+  return {
+    units: unitRows.map(unit => ({
+      id: unit.id,
+      code: unit.code,
+      label: unit.label,
+      allowDecimal: unit.allow_decimal !== false
+    })),
+    categories: categoryRows.map(category => ({
+      id: category.id,
+      name: category.name,
+      sortOrder: Number(category.sort_order || 0),
+      items: (category.inventory_items || [])
+        .filter(item => item.active !== false)
+        .sort((a, b) => Number(a.sort_order) - Number(b.sort_order))
+        .map(item => ({
+          id: item.id,
+          categoryId: category.id,
+          name: item.name,
+          unitId: item.default_unit_id,
+          unitCode: item.inventory_units?.code || '',
+          sortOrder: Number(item.sort_order || 0)
+        }))
+    }))
+  };
+}
+
+async function getInventoryLogByDate(logDate) {
+  const logs = await supabaseFetch('inventory_logs', {
+    query: `?log_date=eq.${encodeURIComponent(logDate)}&select=*&limit=1`
+  });
+  if (!logs?.length) return null;
+  const log = logs[0];
+  const lines = await supabaseFetch('inventory_log_lines', {
+    query: `?inventory_log_id=eq.${encodeURIComponent(log.id)}&select=*,inventory_items(name),inventory_categories(name),inventory_units(code)&order=category_id.asc,sort_order.asc,id.asc`
+  });
+  return mapInventoryLog(log, lines.map(mapInventoryLine));
+}
+
+function normalizeInventoryLine(line, index) {
+  return {
+    category_id: Number(line.categoryId),
+    item_id: line.itemId ? Number(line.itemId) : null,
+    custom_item_name: line.itemId ? null : String(line.customItemName || line.itemName || '').trim(),
+    unit_id: Number(line.unitId),
+    in_qty: Number(line.inQty || 0),
+    out_qty: Number(line.outQty || 0),
+    is_custom: !line.itemId,
+    sort_order: Number.isInteger(line.sortOrder) ? line.sortOrder : index,
+    notes: line.notes ? String(line.notes) : null
+  };
+}
+
+function validateInventoryLines(lines) {
+  if (!Array.isArray(lines)) {
+    const error = new Error('Inventory lines must be an array.');
+    error.statusCode = 400;
+    throw error;
+  }
+  lines.forEach((line, index) => {
+    if (!line.categoryId || !line.unitId) {
+      const error = new Error(`Inventory row ${index + 1} is missing category or unit.`);
+      error.statusCode = 400;
+      throw error;
+    }
+    if (!line.itemId && !String(line.customItemName || line.itemName || '').trim()) {
+      const error = new Error(`Inventory row ${index + 1} needs an item name.`);
+      error.statusCode = 400;
+      throw error;
+    }
+    if (Number(line.inQty || 0) < 0 || Number(line.outQty || 0) < 0) {
+      const error = new Error(`Inventory row ${index + 1} has an invalid quantity.`);
+      error.statusCode = 400;
+      throw error;
+    }
+  });
+}
+
+async function saveInventoryDraft({ logDate, lines, user }) {
+  validateInventoryLines(lines);
+  let existing = await getInventoryLogByDate(logDate);
+  if (existing && existing.status !== 'draft') {
+    const error = new Error('Submitted inventory logs cannot be edited.');
+    error.statusCode = 409;
+    throw error;
+  }
+  if (!existing) {
+    const rows = await supabaseFetch('inventory_logs', {
+      method: 'POST',
+      body: [{
+        log_date: logDate,
+        status: 'draft',
+        created_by: user?.name || user?.sub || 'Unknown'
+      }]
+    });
+    existing = mapInventoryLog(rows[0], []);
+  }
+  await supabaseFetch('inventory_log_lines', {
+    method: 'DELETE',
+    query: `?inventory_log_id=eq.${encodeURIComponent(existing.id)}`,
+    prefer: 'return=minimal'
+  });
+  const payload = lines.map((line, index) => ({
+    inventory_log_id: existing.id,
+    ...normalizeInventoryLine(line, index)
+  }));
+  if (payload.length) {
+    await supabaseFetch('inventory_log_lines', {
+      method: 'POST',
+      prefer: 'return=minimal',
+      body: payload
+    });
+  }
+  await supabaseFetch('inventory_logs', {
+    method: 'PATCH',
+    query: `?id=eq.${encodeURIComponent(existing.id)}`,
+    prefer: 'return=minimal',
+    body: { updated_at: new Date().toISOString() }
+  });
+  return getInventoryLogByDate(logDate);
+}
+
+async function submitInventoryLog({ logDate, lines, user }) {
+  const draft = await saveInventoryDraft({ logDate, lines, user });
+  const submittedAt = new Date().toISOString();
+  const rows = await supabaseFetch('inventory_logs', {
+    method: 'PATCH',
+    query: `?id=eq.${encodeURIComponent(draft.id)}`,
+    body: {
+      status: 'submitted',
+      submitted_by: user?.name || user?.sub || 'Unknown',
+      submitted_at: submittedAt,
+      updated_at: submittedAt
+    }
+  });
+  await supabaseFetch('inventory_sheet_sync_jobs', {
+    method: 'POST',
+    prefer: 'return=minimal',
+    body: [{ inventory_log_id: draft.id, status: 'pending' }]
+  });
+  await writeAudit({
+    actor: user,
+    action: 'inventory.submitted',
+    entityType: 'inventory_log',
+    entityId: draft.id,
+    details: { logDate, lineCount: lines.length }
+  });
+  return getInventoryLogByDate(rows[0].log_date);
+}
+
+async function listInventoryLogs({ limit = 30 } = {}) {
+  const logs = await supabaseFetch('inventory_logs', {
+    query: `?select=*&order=log_date.desc&limit=${encodeURIComponent(limit)}`
+  });
+  return Promise.all(logs.map(async log => {
+    const lines = await supabaseFetch('inventory_log_lines', {
+      query: `?inventory_log_id=eq.${encodeURIComponent(log.id)}&select=*,inventory_items(name),inventory_categories(name),inventory_units(code)&order=category_id.asc,sort_order.asc,id.asc`
+    });
+    return mapInventoryLog(log, lines.map(mapInventoryLine));
+  }));
+}
+
+async function listInventorySyncJobs({ limit = 20 } = {}) {
+  return supabaseFetch('inventory_sheet_sync_jobs', {
+    query: `?select=*&order=created_at.desc&limit=${encodeURIComponent(limit)}`
+  });
+}
+
+async function listPendingInventorySyncJobs({ limit = 5 } = {}) {
+  return supabaseFetch('inventory_sheet_sync_jobs', {
+    query: `?status=eq.pending&select=*&order=created_at.asc&limit=${encodeURIComponent(limit)}`
+  });
+}
+
+async function getInventoryLogById(id) {
+  const logs = await supabaseFetch('inventory_logs', {
+    query: `?id=eq.${encodeURIComponent(id)}&select=*&limit=1`
+  });
+  if (!logs?.length) return null;
+  const lines = await supabaseFetch('inventory_log_lines', {
+    query: `?inventory_log_id=eq.${encodeURIComponent(id)}&select=*,inventory_items(name),inventory_categories(name),inventory_units(code)&order=category_id.asc,sort_order.asc,id.asc`
+  });
+  return mapInventoryLog(logs[0], lines.map(mapInventoryLine));
+}
+
+async function updateInventorySyncJob(id, patch) {
+  const rows = await supabaseFetch('inventory_sheet_sync_jobs', {
+    method: 'PATCH',
+    query: `?id=eq.${encodeURIComponent(id)}`,
+    body: patch
+  });
+  return rows?.[0] || null;
+}
+
 async function uploadProductImage({ data, contentType }) {
   ensureSupabaseConfig();
   const extensions = {
@@ -506,6 +776,15 @@ module.exports = {
   writeAudit,
   writeOrderCounter,
   insertCloseout,
+  getInventoryTemplate,
+  getInventoryLogByDate,
+  saveInventoryDraft,
+  submitInventoryLog,
+  listInventoryLogs,
+  listInventorySyncJobs,
+  listPendingInventorySyncJobs,
+  getInventoryLogById,
+  updateInventorySyncJob,
   writeProducts,
   uploadProductImage,
   readJson,

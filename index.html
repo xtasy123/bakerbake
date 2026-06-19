@@ -677,6 +677,154 @@
     gap: 18px;
   }
   #view-reports h1 { font-size: 20px; font-weight: 600; }
+  #view-inventory {
+    padding: 24px;
+    flex-direction: column;
+    overflow-y: auto;
+    gap: 16px;
+  }
+  #view-inventory h1 { font-size: 20px; font-weight: 600; }
+  .inventory-toolbar {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .inventory-date-row {
+    display: flex;
+    align-items: end;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .inventory-date-row label {
+    display: grid;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: .08em;
+  }
+  .inventory-date-row input,
+  .inventory-row input,
+  .inventory-row select {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    min-height: 38px;
+    padding: 8px 10px;
+    font: inherit;
+    background: var(--surface);
+    color: var(--text);
+  }
+  .inventory-status-pill {
+    display: inline-flex;
+    align-items: center;
+    min-height: 30px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: var(--surface2);
+    color: var(--text2);
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: capitalize;
+  }
+  .inventory-status-pill.submitted { background: #e6f6ec; color: #137a3d; }
+  .inventory-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .inventory-tabs {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+  .inventory-tab {
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text2);
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .inventory-tab.active {
+    background: var(--text);
+    border-color: var(--text);
+    color: white;
+  }
+  .inventory-panel {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .inventory-grid {
+    display: grid;
+    grid-template-columns: minmax(150px, 1fr) 92px minmax(86px, 110px) minmax(86px, 110px) minmax(96px, 120px);
+  }
+  .inventory-head,
+  .inventory-row { display: contents; }
+  .inventory-head > div {
+    position: sticky;
+    top: 0;
+    background: var(--surface2);
+    color: var(--text2);
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    border-bottom: 1px solid var(--line);
+    padding: 10px;
+    z-index: 1;
+  }
+  .inventory-cell {
+    border-bottom: 1px solid var(--line);
+    padding: 8px;
+    min-width: 0;
+  }
+  .inventory-row:last-child .inventory-cell { border-bottom: none; }
+  .inventory-row input,
+  .inventory-row select { width: 100%; min-width: 0; }
+  .inventory-item-name {
+    font-weight: 700;
+    padding: 9px 2px;
+  }
+  .inventory-remaining {
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    font-weight: 800;
+    padding: 0 4px;
+  }
+  .inventory-remaining.negative { color: #b42318; }
+  .inventory-add-row {
+    padding: 10px;
+    border-top: 1px solid var(--line);
+    background: var(--surface2);
+  }
+  .inventory-admin {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(260px, .8fr);
+    gap: 14px;
+  }
+  .inventory-history-list {
+    display: grid;
+    gap: 8px;
+  }
+  .inventory-history-card {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px;
+    background: var(--surface);
+  }
+  .inventory-history-card strong { display: block; margin-bottom: 4px; }
+  .inventory-history-meta {
+    color: var(--text2);
+    font-size: 12px;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
   .reports-heading {
     display: flex;
     justify-content: space-between;
@@ -1367,6 +1515,18 @@
       -webkit-overflow-scrolling: touch;
       gap: 16px;
     }
+    #view-inventory {
+      height: 100%;
+      padding: 16px 12px 84px;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .inventory-admin { grid-template-columns: 1fr; }
+    .inventory-toolbar { align-items: stretch; }
+    .inventory-actions { width: 100%; }
+    .inventory-actions button { flex: 1; }
+    .inventory-panel { overflow-x: auto; }
+    .inventory-grid { min-width: 620px; }
     #view-void-requests {
       height: 100%;
       padding: 16px 12px 24px;
@@ -1480,6 +1640,7 @@
       Orders <span id="pending-badge" class="badge" style="display:none">0</span>
     </button>
     <button class="nav-btn" data-role-nav="shared" onclick="showView('reports', this)">Reports</button>
+    <button class="nav-btn" data-role-nav="shared" onclick="showView('inventory', this)">Inventory</button>
     <button class="nav-btn" data-role-nav="admin" onclick="showView('void-requests', this)">
       Void Requests <span id="void-request-badge" class="badge" style="display:none">0</span>
     </button>
@@ -1638,6 +1799,41 @@
     </div>
   </div>
 
+  <!-- ── VIEW: Inventory ── -->
+  <div id="view-inventory" class="view">
+    <div class="inventory-toolbar">
+      <div>
+        <h1>Daily Inventory Log</h1>
+        <p class="reports-date">Inventory counts follow the paper sheet categories.</p>
+      </div>
+      <div class="inventory-date-row">
+        <label>
+          Date
+          <input id="inventory-date" type="date" onchange="loadInventoryForDate(this.value)">
+        </label>
+        <span class="inventory-status-pill" id="inventory-status">Draft</span>
+      </div>
+      <div class="inventory-actions">
+        <button class="btn-cancel" type="button" onclick="loadInventory()">Refresh</button>
+        <button class="btn-cancel" type="button" onclick="saveInventoryDraft()">Save Draft</button>
+        <button class="btn-confirm" type="button" onclick="submitInventory()">Submit</button>
+      </div>
+    </div>
+
+    <div class="inventory-admin">
+      <section>
+        <div class="inventory-tabs" id="inventory-tabs"></div>
+        <div class="inventory-panel" id="inventory-panel"></div>
+      </section>
+      <aside class="report-panel" id="inventory-admin-panel" hidden>
+        <h2>Inventory History</h2>
+        <div class="inventory-history-list" id="inventory-history-list">
+          <p class="report-empty">No inventory logs loaded.</p>
+        </div>
+      </aside>
+    </div>
+  </div>
+
   <!-- ── VIEW: Void Requests ── -->
   <div id="view-void-requests" class="view">
     <h1>Void Requests</h1>
@@ -1760,6 +1956,10 @@
   <button class="mobile-nav-btn" data-role-nav="shared" data-mobile-section="reports" onclick="showMobileSection('reports', this)">
     <span class="nav-icon">▦</span>
     <span>Reports</span>
+  </button>
+  <button class="mobile-nav-btn" data-role-nav="shared" data-mobile-section="inventory" onclick="showMobileSection('inventory', this)">
+    <span class="nav-icon">#</span>
+    <span>Inventory</span>
   </button>
   <button class="mobile-nav-btn" data-role-nav="admin" data-mobile-section="void-requests" onclick="showMobileSection('void-requests', this)">
     <span class="nav-icon">!</span>
@@ -1942,6 +2142,11 @@ let realtimeClient = null;
 let realtimeChannel = null;
 let realtimeRefreshTimer = null;
 let fallbackSyncTimer = null;
+let inventoryTemplate = { units: [], categories: [] };
+let inventoryLines = [];
+let activeInventoryCategoryId = null;
+let inventoryLog = null;
+let inventoryLoaded = false;
 
 function getSession() {
   try {
@@ -2007,6 +2212,273 @@ function setSyncStatus(state, label) {
   if (!status) return;
   status.dataset.state = state;
   status.textContent = label;
+}
+
+function todayManilaKey() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: STORE_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(new Date());
+}
+
+function inventoryDateValue() {
+  return document.getElementById('inventory-date')?.value || todayManilaKey();
+}
+
+function getInventoryUnit(unitId) {
+  return inventoryTemplate.units.find(unit => Number(unit.id) === Number(unitId)) || inventoryTemplate.units[0] || { code: '' };
+}
+
+function normalizeInventoryNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function buildInventoryLinesFromTemplate(log) {
+  if (log?.lines?.length) {
+    return log.lines.map((line, index) => ({
+      localId: `line-${line.id || index}`,
+      categoryId: line.categoryId,
+      itemId: line.itemId || null,
+      itemName: line.itemName,
+      customItemName: line.customItemName || '',
+      unitId: line.unitId,
+      unitCode: line.unitCode,
+      inQty: line.inQty,
+      outQty: line.outQty,
+      isCustom: line.isCustom,
+      sortOrder: line.sortOrder || index,
+      notes: line.notes || ''
+    }));
+  }
+  return inventoryTemplate.categories.flatMap(category =>
+    category.items.map(item => ({
+      localId: `template-${category.id}-${item.id}`,
+      categoryId: category.id,
+      itemId: item.id,
+      itemName: item.name,
+      customItemName: '',
+      unitId: item.unitId,
+      unitCode: item.unitCode,
+      inQty: '',
+      outQty: '',
+      isCustom: false,
+      sortOrder: item.sortOrder,
+      notes: ''
+    }))
+  );
+}
+
+async function loadInventoryForDate(dateValue) {
+  const dateInput = document.getElementById('inventory-date');
+  if (dateInput && dateValue) dateInput.value = dateValue;
+  inventoryLoaded = false;
+  await loadInventory();
+}
+
+async function loadInventory() {
+  if (!currentUser) return;
+  const dateInput = document.getElementById('inventory-date');
+  if (dateInput && !dateInput.value) dateInput.value = todayManilaKey();
+  try {
+    setSyncStatus('syncing', 'Syncing');
+    const [templateResult, logResult] = await Promise.all([
+      apiRequest('/api/inventory?action=template'),
+      apiRequest(`/api/inventory?action=log&date=${encodeURIComponent(inventoryDateValue())}`)
+    ]);
+    inventoryTemplate = templateResult;
+    inventoryLog = logResult.log || null;
+    inventoryLines = buildInventoryLinesFromTemplate(inventoryLog);
+    activeInventoryCategoryId = activeInventoryCategoryId || inventoryTemplate.categories[0]?.id || null;
+    inventoryLoaded = true;
+    renderInventory();
+    if (isAdmin()) await loadInventoryHistory();
+    setSyncStatus('saved', 'Synced');
+  } catch (error) {
+    showToast(error.message || 'Inventory could not be loaded.');
+    setSyncStatus('error', 'Sync error');
+  }
+}
+
+function inventoryPayloadLines() {
+  return inventoryLines.map(line => ({
+    categoryId: Number(line.categoryId),
+    itemId: line.itemId ? Number(line.itemId) : null,
+    itemName: line.itemName,
+    customItemName: line.customItemName || '',
+    unitId: Number(line.unitId),
+    inQty: normalizeInventoryNumber(line.inQty),
+    outQty: normalizeInventoryNumber(line.outQty),
+    sortOrder: Number(line.sortOrder || 0),
+    notes: line.notes || ''
+  }));
+}
+
+function renderInventory() {
+  const tabs = document.getElementById('inventory-tabs');
+  const panel = document.getElementById('inventory-panel');
+  if (!tabs || !panel) return;
+  const status = inventoryLog?.status || 'draft';
+  const statusEl = document.getElementById('inventory-status');
+  statusEl.textContent = status;
+  statusEl.className = `inventory-status-pill ${status}`;
+  document.getElementById('inventory-admin-panel').hidden = !isAdmin();
+  tabs.innerHTML = inventoryTemplate.categories.map(category => `
+    <button class="inventory-tab ${Number(activeInventoryCategoryId) === Number(category.id) ? 'active' : ''}"
+      type="button" onclick="setInventoryCategory(${category.id})">${escapeHTML(category.name)}</button>
+  `).join('');
+  const category = inventoryTemplate.categories.find(item => Number(item.id) === Number(activeInventoryCategoryId))
+    || inventoryTemplate.categories[0];
+  if (!category) {
+    panel.innerHTML = '<p class="report-empty">No inventory template loaded.</p>';
+    return;
+  }
+  const readonly = status === 'submitted';
+  const lines = inventoryLines
+    .filter(line => Number(line.categoryId) === Number(category.id))
+    .sort((a, b) => Number(a.sortOrder) - Number(b.sortOrder));
+  panel.innerHTML = `
+    <div class="inventory-grid">
+      <div class="inventory-head">
+        <div>Item</div><div>Unit</div><div>In</div><div>Out</div><div>Remaining</div>
+      </div>
+      ${lines.map(line => inventoryRowHTML(line, readonly)).join('')}
+    </div>
+    <div class="inventory-add-row">
+      <button class="btn-cancel" type="button" onclick="addInventoryRow(${category.id})" ${readonly ? 'disabled' : ''}>+ Add Row</button>
+    </div>
+  `;
+}
+
+function inventoryRowHTML(line, readonly) {
+  const remaining = normalizeInventoryNumber(line.inQty) - normalizeInventoryNumber(line.outQty);
+  const unit = getInventoryUnit(line.unitId);
+  const unitOptions = inventoryTemplate.units.map(candidate =>
+    `<option value="${candidate.id}" ${Number(candidate.id) === Number(line.unitId) ? 'selected' : ''}>${escapeHTML(candidate.code)}</option>`
+  ).join('');
+  const nameCell = line.isCustom
+    ? `<input value="${escapeHTML(line.customItemName || line.itemName || '')}" ${readonly ? 'disabled' : ''} oninput="updateInventoryLine('${line.localId}', 'customItemName', this.value)">`
+    : `<div class="inventory-item-name">${escapeHTML(line.itemName)}</div>`;
+  return `
+    <div class="inventory-row">
+      <div class="inventory-cell">${nameCell}</div>
+      <div class="inventory-cell"><select ${readonly ? 'disabled' : ''} onchange="updateInventoryLine('${line.localId}', 'unitId', this.value)">${unitOptions}</select></div>
+      <div class="inventory-cell"><input inputmode="decimal" value="${line.inQty ?? ''}" ${readonly ? 'disabled' : ''} oninput="updateInventoryLine('${line.localId}', 'inQty', this.value)"></div>
+      <div class="inventory-cell"><input inputmode="decimal" value="${line.outQty ?? ''}" ${readonly ? 'disabled' : ''} oninput="updateInventoryLine('${line.localId}', 'outQty', this.value)"></div>
+      <div class="inventory-cell"><div class="inventory-remaining ${remaining < 0 ? 'negative' : ''}" data-inventory-remaining="${escapeHTML(line.localId)}">${remaining.toLocaleString()}${escapeHTML(unit.code)}</div></div>
+    </div>
+  `;
+}
+
+function setInventoryCategory(categoryId) {
+  activeInventoryCategoryId = Number(categoryId);
+  renderInventory();
+}
+
+function updateInventoryLine(localId, field, value) {
+  const line = inventoryLines.find(item => item.localId === localId);
+  if (!line) return;
+  if (['inQty', 'outQty'].includes(field)) {
+    line[field] = value;
+    const unit = getInventoryUnit(line.unitId);
+    const remaining = normalizeInventoryNumber(line.inQty) - normalizeInventoryNumber(line.outQty);
+    const remainingEl = document.querySelector(`[data-inventory-remaining="${localId}"]`);
+    if (remainingEl) {
+      remainingEl.textContent = `${remaining.toLocaleString()}${unit.code}`;
+      remainingEl.classList.toggle('negative', remaining < 0);
+    }
+    return;
+  }
+  else if (field === 'unitId') {
+    line.unitId = Number(value);
+    line.unitCode = getInventoryUnit(line.unitId).code;
+  } else {
+    line[field] = value;
+    if (field === 'customItemName') line.itemName = value;
+  }
+  renderInventory();
+}
+
+function addInventoryRow(categoryId) {
+  const unit = inventoryTemplate.units.find(item => item.code === 'pcs') || inventoryTemplate.units[0];
+  inventoryLines.push({
+    localId: `custom-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    categoryId,
+    itemId: null,
+    itemName: '',
+    customItemName: '',
+    unitId: unit.id,
+    unitCode: unit.code,
+    inQty: '',
+    outQty: '',
+    isCustom: true,
+    sortOrder: inventoryLines.filter(line => Number(line.categoryId) === Number(categoryId)).length + 100,
+    notes: ''
+  });
+  renderInventory();
+}
+
+async function saveInventoryDraft() {
+  try {
+    const result = await apiRequest('/api/inventory?action=draft', {
+      method: 'POST',
+      body: JSON.stringify({ logDate: inventoryDateValue(), lines: inventoryPayloadLines() })
+    });
+    inventoryLog = result.log;
+    inventoryLines = buildInventoryLinesFromTemplate(inventoryLog);
+    renderInventory();
+    showToast('Inventory draft saved');
+  } catch (error) {
+    showToast(error.message || 'Inventory draft could not be saved.');
+  }
+}
+
+async function submitInventory() {
+  if (!window.confirm("Submit today's inventory log? Submitted logs cannot be edited.")) return;
+  try {
+    const result = await apiRequest('/api/inventory?action=submit', {
+      method: 'POST',
+      body: JSON.stringify({ logDate: inventoryDateValue(), lines: inventoryPayloadLines() })
+    });
+    inventoryLog = result.log;
+    inventoryLines = buildInventoryLinesFromTemplate(inventoryLog);
+    renderInventory();
+    if (isAdmin()) await loadInventoryHistory();
+    showToast('Inventory submitted');
+  } catch (error) {
+    showToast(error.message || 'Inventory could not be submitted.');
+  }
+}
+
+async function loadInventoryHistory() {
+  if (!isAdmin()) return;
+  const list = document.getElementById('inventory-history-list');
+  if (!list) return;
+  try {
+    const [history, jobs] = await Promise.all([
+      apiRequest('/api/inventory?action=history'),
+      apiRequest('/api/inventory?action=sync-jobs')
+    ]);
+    const jobByLogId = new Map((jobs.jobs || []).map(job => [Number(job.inventory_log_id), job]));
+    list.innerHTML = history.logs?.length
+      ? history.logs.map(log => {
+        const job = jobByLogId.get(Number(log.id));
+        return `
+          <button class="inventory-history-card" type="button" onclick="loadInventoryForDate('${escapeHTML(log.logDate)}')">
+            <strong>${escapeHTML(log.logDate)} · ${escapeHTML(log.status)}</strong>
+            <span class="inventory-history-meta">
+              <span>${escapeHTML(log.submittedBy || log.createdBy || 'Unsubmitted')}</span>
+              <span>Sheet: ${escapeHTML(job?.status || 'not queued')}</span>
+            </span>
+          </button>
+        `;
+      }).join('')
+      : '<p class="report-empty">No inventory logs yet.</p>';
+  } catch {
+    list.innerHTML = '<p class="report-empty">Inventory history could not be loaded.</p>';
+  }
 }
 
 async function syncFromBackend() {
@@ -2200,7 +2672,9 @@ function isAdmin() {
 }
 
 function canAccessView(id) {
-  return isAdmin() ? ['reports', 'void-requests', 'admin'].includes(id) : ['pos', 'orders', 'reports'].includes(id);
+  return isAdmin()
+    ? ['reports', 'inventory', 'void-requests', 'admin'].includes(id)
+    : ['pos', 'orders', 'reports', 'inventory'].includes(id);
 }
 
 function applyRoleUI() {
@@ -3705,31 +4179,38 @@ function showView(id, btn) {
     if (fallbackBtn) fallbackBtn.classList.add('active');
   }
   if (id === 'pos') {
-    document.body.classList.remove('mobile-section-orders', 'mobile-section-reports');
+    document.body.classList.remove('mobile-section-orders', 'mobile-section-reports', 'mobile-section-inventory', 'mobile-section-void-requests', 'mobile-section-admin');
     document.body.classList.add('mobile-section-menu');
     setMobileNavActive('menu');
   }
   if (id === 'orders') {
     activeOrderFilter = 'pending';
-    document.body.classList.remove('mobile-section-menu', 'mobile-section-cart', 'mobile-section-reports');
+    document.body.classList.remove('mobile-section-menu', 'mobile-section-cart', 'mobile-section-reports', 'mobile-section-inventory', 'mobile-section-void-requests', 'mobile-section-admin');
     document.body.classList.add('mobile-section-orders');
     setMobileNavActive('orders');
   }
   if (id === 'reports') {
     activeReportView = 'today';
-    document.body.classList.remove('mobile-section-menu', 'mobile-section-cart', 'mobile-section-orders', 'mobile-section-admin');
+    document.body.classList.remove('mobile-section-menu', 'mobile-section-cart', 'mobile-section-orders', 'mobile-section-inventory', 'mobile-section-void-requests', 'mobile-section-admin');
     document.body.classList.add('mobile-section-reports');
     setMobileNavActive('reports');
   }
+  if (id === 'inventory') {
+    document.body.classList.remove('mobile-section-menu', 'mobile-section-cart', 'mobile-section-orders', 'mobile-section-reports', 'mobile-section-void-requests', 'mobile-section-admin');
+    document.body.classList.add('mobile-section-inventory');
+    setMobileNavActive('inventory');
+    if (!inventoryLoaded) loadInventory();
+    else renderInventory();
+  }
   if (id === 'void-requests') {
-    document.body.classList.remove('mobile-section-menu', 'mobile-section-cart', 'mobile-section-orders', 'mobile-section-reports', 'mobile-section-admin');
+    document.body.classList.remove('mobile-section-menu', 'mobile-section-cart', 'mobile-section-orders', 'mobile-section-reports', 'mobile-section-inventory', 'mobile-section-admin');
     document.body.classList.add('mobile-section-void-requests');
     setMobileNavActive('void-requests');
     renderVoidRequests();
     if (BACKEND_ENABLED) syncFromBackend();
   }
   if (id === 'admin') {
-    document.body.classList.remove('mobile-section-menu', 'mobile-section-cart', 'mobile-section-orders', 'mobile-section-reports');
+    document.body.classList.remove('mobile-section-menu', 'mobile-section-cart', 'mobile-section-orders', 'mobile-section-reports', 'mobile-section-inventory', 'mobile-section-void-requests');
     document.body.classList.add('mobile-section-admin');
     setMobileNavActive('admin');
     renderAdminProducts();
@@ -3754,6 +4235,10 @@ function showMobileSection(section, btn) {
     showView('orders');
     return;
   }
+  if (section === 'inventory') {
+    showView('inventory');
+    return;
+  }
   if (section === 'reports') {
     showView('reports');
     return;
@@ -3770,7 +4255,7 @@ function showMobileSection(section, btn) {
   const registerBtn = document.querySelector('.topbar-nav .nav-btn');
   if (registerBtn) registerBtn.classList.add('active');
 
-  document.body.classList.remove('mobile-section-menu', 'mobile-section-cart', 'mobile-section-orders', 'mobile-section-reports');
+  document.body.classList.remove('mobile-section-menu', 'mobile-section-cart', 'mobile-section-orders', 'mobile-section-reports', 'mobile-section-inventory', 'mobile-section-void-requests', 'mobile-section-admin');
   document.body.classList.add(section === 'cart' ? 'mobile-section-cart' : 'mobile-section-menu');
   setMobileNavActive(section);
 }
