@@ -134,4 +134,4 @@ GOOGLE_SHEETS_PRIVATE_KEY
 INVENTORY_SYNC_SECRET
 ```
 
-Use a Google Cloud service account for `GOOGLE_SHEETS_CLIENT_EMAIL` and `GOOGLE_SHEETS_PRIVATE_KEY`, then share the target Google Sheet with that service account email as an editor. The app writes Supabase first, then queues an inventory sync job. Call `/api/inventory-sync` with header `x-sync-secret: INVENTORY_SYNC_SECRET` from a cron job to process queued submissions.
+Use a Google Cloud service account for `GOOGLE_SHEETS_CLIENT_EMAIL` and `GOOGLE_SHEETS_PRIVATE_KEY`, then share the target Google Sheet with that service account email as an editor. The app writes Supabase first, then queues an inventory sync job. Call `/api/inventory?action=sync` with header `x-sync-secret: INVENTORY_SYNC_SECRET` from a cron job to process queued submissions.

@@ -15,7 +15,6 @@ const orderRpcMigration = read('supabase/migrations/20260612_create_order_rpc.sq
 const inventoryMigration = read('supabase/migrations/20260619_inventory_feature.sql');
 const auth = read('api/_lib/auth.js');
 const inventoryApi = read('api/inventory.js');
-const inventorySyncApi = read('api/inventory-sync.js');
 
 assert.match(index, /const CART_STORAGE_KEY = 'bakerbake-pos-cart-v1'/);
 assert.match(index, /localStorage\.setItem\(CART_STORAGE_KEY, JSON\.stringify\(cart\)\)/);
@@ -74,9 +73,10 @@ assert.match(storage, /inventory_sheet_sync_jobs/);
 assert.match(storage, /listPendingInventorySyncJobs/);
 assert.match(inventoryApi, /action === 'template'/);
 assert.match(inventoryApi, /action === 'submit'/);
-assert.match(inventorySyncApi, /GOOGLE_SHEETS_SPREADSHEET_ID/);
-assert.match(inventorySyncApi, /listPendingInventorySyncJobs/);
-assert.match(inventorySyncApi, /valueInputOption=USER_ENTERED/);
+assert.match(inventoryApi, /action === 'sync'/);
+assert.match(inventoryApi, /GOOGLE_SHEETS_SPREADSHEET_ID/);
+assert.match(inventoryApi, /listPendingInventorySyncJobs/);
+assert.match(inventoryApi, /valueInputOption=USER_ENTERED/);
 assert.doesNotMatch(storage, /supabaseFetch\('orders',\s*\{\s*method: 'DELETE'/);
 assert.doesNotMatch(server, /supabaseFetch\('orders',\s*\{\s*method: 'DELETE'/);
 assert.match(server, /Use the resource-specific order and product endpoints/);
